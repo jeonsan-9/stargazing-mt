@@ -200,3 +200,58 @@ table.hourly { border-collapse: separate; border-spacing: 2px; font-size: 11px; 
 #skyMoon.down { opacity: .28; }
 #skyMoon.down .disc { filter: grayscale(.6); }
 #skyMoon.behind { opacity: .6; }
+
+/* ---------- 아기자기 테마 (계명대학교 AAA) ---------- */
+:root {
+  --glass: rgba(24, 22, 46, .82);
+  --glass-strong: #1a1930;
+  --line: rgba(207, 196, 249, .16);
+  --line-strong: rgba(207, 196, 249, .42);
+  --text: #f5f2ff;
+  --muted: #c3c0da;
+  --faint: #a29fbd;
+  --accent: #cfbfff;
+  --accent-2: #ffe6a8;
+  --mint: #b6ebd9;
+  --radius: 22px;
+}
+#panel, #detailPanel, #controls {
+  background: linear-gradient(145deg, rgba(166, 141, 224, .08), transparent 40%), var(--glass);
+  box-shadow: 0 10px 30px rgba(4, 5, 16, .45), inset 0 1px 0 rgba(242, 233, 255, .08);
+}
+.brand { flex-wrap: wrap; gap: 6px 9px; }
+.brand .mascot { transform-origin: 50% 60%; }
+.brand .club {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+  border: 1px solid rgba(182, 235, 217, .3); border-radius: 999px;
+  background: #22353a; color: var(--mint); font-size: 11.5px; font-weight: 650; white-space: nowrap;
+}
+.brand .club::before {
+  content: ""; width: 9px; height: 9px; background: var(--accent-2);
+  clip-path: polygon(50% 0, 64% 36%, 100% 50%, 64% 64%, 50% 100%, 36% 64%, 0 50%, 36% 36%);
+}
+#tabs { gap: 3px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: #151429; }
+#tabs button { border-radius: 999px; }
+#tabs button.active { color: #262039; background: var(--accent); font-weight: 750; }
+.night, .site, .pick { border-radius: 16px; }
+.night { background: rgba(208, 194, 252, .055); }
+.night.active, .site.active { background: #343047; border-color: var(--accent); }
+.cal { border-radius: 12px; }
+.score, .ns { border-radius: 999px; }
+#closeDetail, .cal-head button { border-radius: 50%; }
+#controls select, #controls button { border-radius: 999px; }
+#controls button.play { background: var(--mint); }
+.check input { accent-color: var(--mint); }
+.hourly th.rl { background: var(--glass-strong); }
+#skyMoon .tag { background: rgba(36, 32, 62, .7); color: #f1ecff; border: 1px solid var(--line); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+@keyframes aaa-twinkle { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes aaa-bob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-1.5px) rotate(-4deg); } }
+@media (prefers-reduced-motion: no-preference) {
+  .brand .club::before { animation: aaa-twinkle 4s ease-in-out infinite; }
+  .brand .mascot { animation: aaa-bob 5s ease-in-out infinite; }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .night, .site, .pick { transition: transform .16s ease-out, background .16s, border-color .16s; }
+  .night:hover, .site:hover, .pick:hover { transform: translateY(-2px); }
+}

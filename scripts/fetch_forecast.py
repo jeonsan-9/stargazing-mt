@@ -79,7 +79,7 @@ SECRET_PARAMS = {"authKey", "serviceKey"}
 def scrub(text):
     """오류 문구에서 키 값을 지움 (errors 는 공개되는 forecast.json 에 들어감)."""
     text = str(text)
-    for name in ("KMA_AUTH_KEY", "KMA_SERVICE_KEY", "BAZE_API_KEY"):
+    for name in ("KMA_AUTH_KEY", "KMA_SERVICE_KEY"):
         val = os.environ.get(name)
         if val:
             text = text.replace(val, "***").replace(urllib.parse.quote(val, safe=""), "***")
