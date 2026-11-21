@@ -139,7 +139,7 @@ function altAz(raH, decD, date, lat, lon) {
 }
 
 function sep(a1, d1, a2, d2) {
-  // 지평 좌표 사이 각거리 (도)
+  // 각거리 (도). a = 경도 성분(방위각), d = 위도 성분(고도)
   const c = Math.sin(d1 * RAD) * Math.sin(d2 * RAD) + Math.cos(d1 * RAD) * Math.cos(d2 * RAD) * Math.cos((a1 - a2) * RAD);
   return Math.acos(Math.max(-1, Math.min(1, c))) * DEG;
 }
@@ -175,7 +175,7 @@ function bestOf(samples, posAt, opts) {
     if (alt < opts.minAlt) continue;
     let moonF = 1;
     if (s.moonAlt > 0 && opts.moonSens > 0) {
-      const d = sep(alt, az, s.moonAlt, s.moonAz);
+      const d = sep(az, alt, s.moonAz, s.moonAlt);
       const near = d < 25 ? 1 : d < 60 ? 0.6 : 0.35;
       moonF = 1 - opts.moonSens * s.ill * near * Math.min(1, (s.moonAlt + 3) / 25);
     }
@@ -194,8 +194,11 @@ export function recommendTargets(ymdStr, lat, lon) {
   // 유성우
   const [yy] = ymdStr.split("-").map(Number);
   for (const [name, m, d, win, zhr, ra, dec] of SHOWERS) {
-    const peak = `${yy}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const diff = Math.round((new Date(`${ymdStr}T12:00:00${KST}`) - new Date(`${peak}T12:00:00${KST}`)) / 86400e3);
+    // 연말·연초를 넘나드는 경우(12/31에 1/3 극대 등) 앞뒤 해 중 가장 가까운 극대일
+    const here = new Date(`${ymdStr}T12:00:00${KST}`);
+    const diff = [yy - 1, yy, yy + 1]
+      .map((y) => Math.round((here - new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T12:00:00${KST}`)) / 86400e3))
+      .reduce((a, b) => (Math.abs(b) < Math.abs(a) ? b : a));
     // 극대일 밤 또는 그 전날 밤(새벽이 극대)이 가장 좋음
     if (diff < -win - 1 || diff > win) continue;
     const b = bestOf(samples, () => ({ ra, dec }), { ...base, maxSun: -15, minAlt: 10, moonSens: 0.9 });

@@ -43,7 +43,7 @@ async function loadLive() {
   const siteResp = await omFetch({
     latitude: SITES.map((s) => s.lat).join(","),
     longitude: SITES.map((s) => s.lon).join(","),
-    hourly: "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_2m,wind_speed_10m,visibility,temperature_2m",
+    hourly: "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_2m,wind_speed_10m,visibility,temperature_2m,precipitation",
     models: OPEN_METEO_MODELS.join(","),
     forecast_days: 7,
     timezone: "Asia/Seoul",
@@ -67,6 +67,7 @@ async function loadLive() {
         wind: pick(h, "wind_speed_10m", m),
         vis: pick(h, "visibility", m),
         temp: pick(h, "temperature_2m", m),
+        precip: pick(h, "precipitation", m),
       };
     }
     sites[s.id] = { elevation: siteResp[i].elevation, models };

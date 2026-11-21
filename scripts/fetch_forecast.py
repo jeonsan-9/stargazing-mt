@@ -42,7 +42,7 @@ GRID_MODELS = ["ecmwf_ifs025", "gfs_seamless", "icon_seamless", "jma_seamless"]
 GRID_LAYER_MODELS = ["ecmwf_ifs025", "gfs_seamless"]
 SITE_VARS = (
     "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
-    "relative_humidity_2m,wind_speed_10m,visibility,temperature_2m"
+    "relative_humidity_2m,wind_speed_10m,visibility,temperature_2m,precipitation"
 )
 
 
@@ -144,6 +144,7 @@ def fetch_open_meteo(sites):
                 "wind": pick(h, "wind_speed_10m", m),
                 "vis": pick(h, "visibility", m),
                 "temp": pick(h, "temperature_2m", m),
+                "precip": pick(h, "precipitation", m),
             }
         out[s["id"]] = {"elevation": r.get("elevation"), "models": models}
     return times, out

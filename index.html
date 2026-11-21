@@ -7,6 +7,8 @@
   <meta name="description" content="여러 기상 모델을 종합해 동아리 관측 MT 날짜와 장소를 고르는 3D 지도" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gaegu:wght@700&display=swap" />
   <link rel="stylesheet" href="css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.38/dist.min.js"></script>
@@ -40,10 +42,10 @@
     </header>
 
     <nav id="tabs" role="tablist">
-      <button data-view="week" class="active">주</button>
-      <button data-view="month">월</button>
-      <button data-view="sem">학기</button>
-      <button data-view="year">1년</button>
+      <button role="tab" aria-selected="true" data-view="week" class="active">주</button>
+      <button role="tab" aria-selected="false" data-view="month">월</button>
+      <button role="tab" aria-selected="false" data-view="sem">학기</button>
+      <button role="tab" aria-selected="false" data-view="year">1년</button>
     </nav>
 
     <div id="view-week" class="view">

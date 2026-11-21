@@ -518,7 +518,8 @@ function renderLayers() {
       getText: (r) => (r.departure ? "출발 · 계명대" : `${r.site.name} ${r.score ?? "-"}`),
       getSize: (r) => (r.site.primary || r.departure ? 14 : 12),
       getColor: (r) => (r.departure ? [150, 200, 255, 255] : r.site.primary ? [255, 255, 255, 255] : [200, 205, 215, 230]),
-      getPixelOffset: [0, -14],
+      // 가까이 붙은 보현산 두 곳 이름이 겹치지 않게 하나는 아래로
+      getPixelOffset: (r) => (r.site.id === "bohyeon_sci" ? [0, 14] : [0, -14]),
       background: true,
       getBackgroundColor: [10, 14, 25, 190],
       backgroundPadding: [5, 3],
@@ -742,6 +743,7 @@ function hourTable(r) {
       ${row("시정", hrs.map((h) => (h.vis == null ? cell("·", "na") : cell(Math.round(h.vis / 1000), h.vis < 10000 ? "w1" : ""))).join(""), "km")}
       ${row("시상", hrs.map((h) => warnCell(h.seeing, (v) => v, 4, 6)).join(""), "7Timer 1(좋음)~8(나쁨)")}
       ${row("투명도", hrs.map((h) => warnCell(h.transparency, (v) => v, 4, 6)).join(""), "7Timer 1(좋음)~8(나쁨)")}
+      ${row("비", hrs.map((h) => (h.precip == null ? cell("·", "na") : cell(h.precip >= 0.1 ? h.precip.toFixed(1) : "", h.precip >= 1 ? "w2" : h.precip >= 0.1 ? "w1" : ""))).join(""), "mm/시간, 모델 중간값")}
       ${row("기온", hrs.map((h) => (h.temp == null ? cell("·", "na") : cell(Math.round(h.temp)))).join(""), "°C")}
     </tbody>
   </table></div>`;
@@ -878,7 +880,10 @@ function renderView() {
 
 function setView(v) {
   state.view = v;
-  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+  document.querySelectorAll("#tabs button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.view === v);
+    b.setAttribute("aria-selected", String(b.dataset.view === v));
+  });
   ["week", "month", "sem", "year"].forEach((k) => ($(`view-${k}`).hidden = k !== v));
   renderView();
 }
@@ -900,6 +905,8 @@ document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => setV
   state.month = todayYmd().slice(0, 7);
   setNight(nightsAvailable()[0]);
   selectSite("bohyeon_obs", false); // 동아리 MT는 항상 영천
+  // 휴대폰에선 상세 패널이 메인 화면을 가리므로 처음엔 닫아 둠
+  if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.remove("detail-open");
   window.__app = state; // 디버깅용
   window.__map = map;
 })();
