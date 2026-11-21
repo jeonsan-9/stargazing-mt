@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AAA 징크스 타파기 · 디오라마</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+  <style>
+    :root { --paper: #fff4e2; --ink: #3b3346; --sage: #8fb48a; --honey: #f0b866; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #2a2858; color: var(--ink); font-family: "Gowun Dodum", sans-serif; overflow: hidden; }
+    #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #pins { position: fixed; inset: 0; pointer-events: none; }
+    .pin { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 6px; margin: -46px 0 0 -14px;
+      background: var(--paper); border-radius: 999px; padding: 3px 10px 3px 3px; font-size: 13px; white-space: nowrap;
+      box-shadow: 0 3px 0 rgba(60, 40, 80, .18), 0 8px 18px rgba(30, 20, 60, .25); }
+    .pin b { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--c); color: #fff; font: 15px "Jua", sans-serif; }
+    .pin.primary { font-size: 15px; padding-right: 12px; }
+    .pin.primary b { width: 32px; height: 32px; font-size: 17px; }
+    header { position: fixed; left: 16px; top: 14px; background: var(--paper); border-radius: 18px; padding: 10px 16px;
+      box-shadow: 0 4px 0 rgba(60, 40, 80, .15); }
+    header h1 { margin: 0; font: 22px "Jua", sans-serif; }
+    header small { opacity: .7; }
+    #time { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(560px, calc(100% - 32px));
+      background: var(--paper); border-radius: 18px; padding: 10px 16px; box-shadow: 0 4px 0 rgba(60, 40, 80, .15); }
+    #time label { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px; }
+    #time input { width: 100%; accent-color: var(--honey); }
+    #note { position: fixed; right: 16px; top: 14px; max-width: 260px; font-size: 12px; background: rgba(255, 244, 226, .85);
+      border-radius: 12px; padding: 8px 12px; }
+    #note:empty { display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="pins"></div>
+  <header><h1>AAA 징크스 타파기</h1><small>계명대학교 천체관측 동아리</small></header>
+  <div id="note"></div>
+  <div id="time"><label><span id="when">-</span><span id="moonTxt"></span></label><input id="slider" type="range" min="0" max="0" value="0" /></div>
+  <script type="module">
+    import { Diorama } from "./js/diorama/scene.js";
+    import { loadForecast } from "./js/data.js";
+    import { SITES, DEPARTURE } from "./js/sites.js";
+    import { GRID_MODELS } from "./js/models.js";
+    import { scoreHour, parseLocal } from "./js/score.js";
+
+    const q = new URLSearchParams(location.search);
+    const model = q.get("model") || "models/korea.glb";
+    const shown = SITES.slice(0, 4); // 영천 두 곳 + 의성 + 가지산
+    const d = await new Diorama(document.getElementById("scene"), document.getElementById("pins")).load(model);
+    d.calibrateWith([...SITES, DEPARTURE]);
+    if (d.placeholder) document.getElementById("note").textContent = "임시 섬이에요. models/korea.glb를 넣으면 직접 만든 모델로 바뀌어요.";
+
+    let data = null;
+    try { data = await loadForecast(); } catch (e) { console.warn("예보 없음", e); }
+    const slider = document.getElementById("slider");
+    const cloudModel = GRID_MODELS.find((m) => data?.grid?.models?.[m]);
+
+    function show(i) {
+      const t = data ? parseLocal(data.times[i]) : q.get("t") ? new Date(q.get("t")) : new Date();
+      d.setTime(t);
+      if (cloudModel) d.setClouds(data.grid.models[cloudModel][i], data.grid.lats, data.grid.lons);
+      d.setSites(shown.map((s) => ({ ...s, score: data ? Math.round(scoreHour(data, s, i).score ?? NaN) || (scoreHour(data, s, i).score === 0 ? 0 : null) : null })));
+      const il = Math.round(SunCalc.getMoonIllumination(t).fraction * 100);
+      document.getElementById("when").textContent = t.toLocaleString("ko-KR", { month: "numeric", day: "numeric", weekday: "short", hour: "numeric", timeZone: "Asia/Seoul" });
+      document.getElementById("moonTxt").textContent = `달 ${il}%`;
+    }
+
+    if (data) {
+      slider.max = data.times.length - 1;
+      // 시작: 오늘 밤 22시 (없으면 첫 시각)
+      const want = q.get("t");
+      let i0 = data.times.findIndex((t) => (want ? t >= want : t.endsWith("T22:00")));
+      slider.value = Math.max(0, i0);
+      slider.oninput = () => show(+slider.value);
+    }
+    show(+slider.value);
+    d.start();
+    window.diorama = d;
+  </script>
+</body>
+</html>
