@@ -24,16 +24,27 @@
       <p id="status">예보 불러오는 중…</p>
     </header>
 
-    <section>
-      <h2>관측할 밤 · 영천 기준</h2>
-      <div id="nights"></div>
-    </section>
+    <nav id="tabs" role="tablist">
+      <button data-view="week" class="active">주</button>
+      <button data-view="month">월</button>
+      <button data-view="sem">학기</button>
+      <button data-view="year">1년</button>
+    </nav>
 
-    <section>
-      <h2>관측지 점수</h2>
-      <div id="list"></div>
-      <label class="check"><input type="checkbox" id="toggleExtra" checked /> 비교용 후보도 보기</label>
-    </section>
+    <div id="view-week" class="view">
+      <section>
+        <h2>이번 주 · 외부 관측 갈까 말까</h2>
+        <div id="nights"></div>
+      </section>
+      <section>
+        <h2>관측지 점수</h2>
+        <div id="list"></div>
+        <label class="check"><input type="checkbox" id="toggleExtra" checked /> 비교용 관측지도 보기</label>
+      </section>
+    </div>
+    <div id="view-month" class="view" hidden></div>
+    <div id="view-sem" class="view" hidden></div>
+    <div id="view-year" class="view" hidden></div>
   </aside>
 
   <aside id="detailPanel">

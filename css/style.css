@@ -135,3 +135,51 @@ table.hourly { border-collapse: separate; border-spacing: 2px; font-size: 11px; 
   #controls .row:first-child { flex-wrap: wrap; }
   .moonlabel { order: 9; width: 100%; }
 }
+
+/* ---------- 주/월/학기/1년 탭 ---------- */
+#tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin-top: 16px; padding: 3px; border-radius: 12px; background: rgba(255,255,255,.05); }
+#tabs button { border: 0; background: transparent; padding: 7px 0; border-radius: 9px; color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; }
+#tabs button.active { background: rgba(157,180,255,.18); color: var(--text); }
+.view h3 { font-size: 14px; margin: 18px 0 8px; font-weight: 700; }
+.view .lead { margin: 14px 0 10px; }
+
+/* 학기 */
+.strip { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: 22px; }
+.strip-cell { border: 0; border-radius: 3px; cursor: pointer; opacity: .55; padding: 0; }
+.strip-cell.top { opacity: 1; outline: 2px solid #fff; outline-offset: -2px; }
+.strip-legend { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--faint); margin: 4px 0 8px; }
+.pick { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 1px solid transparent; border-radius: 12px; background: transparent; cursor: pointer; text-align: left; }
+.pick:hover { background: rgba(255,255,255,.05); }
+.rank { width: 20px; color: var(--accent-2); font-weight: 800; text-align: center; }
+.pd { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.pd small { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+/* 월 */
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+.cal-head b { font-size: 15px; }
+.cal-head button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,.04); cursor: pointer; font-size: 16px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-wd { text-align: center; font-size: 10.5px; color: var(--faint); padding: 4px 0; }
+.cal { position: relative; aspect-ratio: 1 / 1.15; border: 0; border-radius: 9px; cursor: pointer; padding: 4px 0 3px;
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)); display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.cal::after { content: ""; position: absolute; left: 4px; right: 4px; bottom: 0; height: 3px; border-radius: 2px; background: var(--c); }
+.cal .cd { font-size: 11px; color: var(--muted); }
+.cal .cs { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cal.past { opacity: .3; }
+.cal.today .cd { color: var(--accent-2); font-weight: 800; }
+.cal.fc { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.cal-empty { aspect-ratio: 1 / 1.15; }
+.cal-legend { display: flex; gap: 12px; font-size: 10.5px; color: var(--faint); margin-top: 8px; }
+.fc-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--accent); margin-right: 4px; vertical-align: -1px; }
+
+/* 1년 */
+.yr-head, .yr { display: grid; grid-template-columns: 52px 1fr 36px 44px 40px; align-items: center; gap: 8px; }
+.yr-head { font-size: 10.5px; color: var(--faint); margin-bottom: 2px; }
+.yr { width: 100%; padding: 6px 4px; border: 0; border-radius: 10px; background: transparent; cursor: pointer; text-align: left; }
+.yr:hover { background: rgba(255,255,255,.05); }
+.yr.off { opacity: .5; }
+.ym { font-weight: 700; display: flex; flex-direction: column; line-height: 1.1; }
+.ym small { font-size: 10px; color: var(--faint); font-weight: 500; }
+.ybar { height: 8px; border-radius: 4px; background: rgba(255,255,255,.06); overflow: hidden; }
+.ybar span { display: block; height: 100%; border-radius: 4px; }
+.yp, .yd { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }

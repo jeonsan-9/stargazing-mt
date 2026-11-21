@@ -2,6 +2,7 @@
 import { SITES, DEPARTURE } from "./sites.js";
 import { MODELS, GRID_MODELS, modelLabel } from "./models.js";
 import { loadForecast } from "./data.js";
+import { renderMonth, renderSemester, renderYear, moonIcon } from "./longrange.js";
 import { scoreNight, scoreColor, moonInfo, darkWindow, parseLocal, ymd, addDays, nightIndices } from "./score.js";
 
 const EXAG = 3; // 지형 과장 배율 (한반도 산은 낮아서 3배로 키워야 높낮이가 보임)
@@ -20,6 +21,8 @@ const state = {
   showExtra: true,
   selected: null,
   results: [],
+  view: "week",
+  month: null, // YYYY-MM (월 보기)
 };
 
 const $ = (id) => document.getElementById(id);
@@ -426,19 +429,6 @@ function recompute() {
 }
 
 // ---------- 화면 ----------
-// 달 위상 아이콘 (SVG). phase 0 = 삭, 0.5 = 보름
-function moonIcon(phase) {
-  const r = 7;
-  const lit = "#f4e6b8";
-  const darkC = "#232a45";
-  const k = Math.cos(phase * 2 * Math.PI); // 1 → -1 → 1
-  const waxing = phase < 0.5;
-  const rx = Math.abs(k) * r;
-  const sweepOuter = waxing ? 1 : 0;
-  const sweepInner = k > 0 ? (waxing ? 0 : 1) : waxing ? 1 : 0;
-  const path = `M ${r} 0 A ${r} ${r} 0 0 ${sweepOuter} ${r} ${2 * r} A ${rx} ${r} 0 0 ${sweepInner} ${r} 0 Z`;
-  return `<svg class="nm" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="7" fill="${darkC}"/><path d="${path}" fill="${lit}"/></svg>`;
-}
 
 function renderNights() {
   const box = $("nights");
@@ -718,6 +708,47 @@ $("play").onclick = () => {
 };
 $("closeDetail").onclick = () => document.body.classList.remove("detail-open");
 
+// ---------- 주 / 월 / 학기 / 1년 ----------
+const MT_SITE = SITES.find((s) => s.id === "bohyeon_obs");
+const todayYmd = () => ymd(new Date(Date.now() - 6 * 3600e3));
+
+function pickDate(d) {
+  // 예보 범위 안이면 주 보기로 가서 그 밤을 열고, 아니면 월 보기로
+  if (nightsAvailable().includes(d)) {
+    setView("week");
+    setNight(d);
+    selectSite("bohyeon_obs", false);
+  } else {
+    state.month = d.slice(0, 7);
+    setView("month");
+  }
+}
+
+function renderView() {
+  const v = state.view;
+  if (v === "month")
+    renderMonth($("view-month"), state.data, MT_SITE, state.month, todayYmd(), pickDate, (dm) => {
+      const [y, m] = state.month.split("-").map(Number);
+      const d = new Date(Date.UTC(y, m - 1 + dm, 1));
+      state.month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      renderView();
+    });
+  if (v === "sem") renderSemester($("view-sem"), state.data, MT_SITE, todayYmd(), pickDate);
+  if (v === "year")
+    renderYear($("view-year"), state.data, MT_SITE, todayYmd(), (ym) => {
+      state.month = ym;
+      setView("month");
+    });
+}
+
+function setView(v) {
+  state.view = v;
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+  ["week", "month", "sem", "year"].forEach((k) => ($(`view-${k}`).hidden = k !== v));
+  renderView();
+}
+document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
+
 // ---------- 시작 ----------
 (async () => {
   try {
@@ -731,6 +762,7 @@ $("closeDetail").onclick = () => document.body.classList.remove("detail-open");
   const srcCount = new Set(Object.values(state.data.sites).flatMap((s) => Object.keys(s.models))).size;
   $("status").textContent = `예보 ${srcCount}개 소스 · ${gen.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 기준${state.data.source === "live" ? " (실시간 Open-Meteo)" : ""}`;
   renderModelSelect();
+  state.month = todayYmd().slice(0, 7);
   setNight(nightsAvailable()[0]);
   selectSite("bohyeon_obs", false); // 동아리 MT는 항상 영천
   window.__app = state; // 디버깅용
