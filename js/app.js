@@ -196,6 +196,33 @@ function noiseCanvas(w, h) {
   return c;
 }
 
+let cloudMask = null;
+function koreaCloudMask(W, H, g) {
+  if (cloudMask && cloudMask.width === W && cloudMask.height === H) return cloudMask;
+  const half = Math.abs(g.lons[1] - g.lons[0]) / 2;
+  const w = g.lons[0] - half;
+  const e = g.lons[g.lons.length - 1] + half;
+  const n = Math.max(g.lats[0], g.lats[g.lats.length - 1]) + half;
+  const s = Math.min(g.lats[0], g.lats[g.lats.length - 1]) - half;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fillRect(0, 0, W, H);
+  ctx.filter = "blur(18px)";
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  KOREA_RING.forEach(([lon, lat], k) => {
+    const x = ((lon - w) / (e - w)) * W;
+    const y = ((n - lat) / (n - s)) * H;
+    k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.fill();
+  cloudMask = c;
+  return c;
+}
+
 function cloudImageAt(hourIdx) {
   const g = state.data?.grid;
   const field = cloudField(hourIdx);
@@ -235,6 +262,8 @@ function cloudImageAt(hourIdx) {
   // 구름 질감: 미리 만든 잡음으로 가장자리를 뭉게뭉게하게
   big.globalCompositeOperation = "destination-in";
   big.drawImage(noiseCanvas(cloudCanvas.width, cloudCanvas.height), 0, 0);
+  // 한국 밖 구름은 옅게 (지도 마스크와 맞춤)
+  big.drawImage(koreaCloudMask(cloudCanvas.width, cloudCanvas.height, g), 0, 0);
   big.globalCompositeOperation = "source-over";
   cloudKey = key;
   cloudCache.set(key, cloudCanvas);
