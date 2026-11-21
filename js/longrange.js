@@ -41,11 +41,11 @@ function moonDarkness(ymdStr, lat, lon) {
 }
 
 // 한 밤의 MT 점수. 예보가 있으면 예보, 없으면 통계
-export function nightOutlook(data, site, ymdStr) {
+export function nightOutlook(data, site, ymdStr, statOnly = false) {
   const mid = new Date(`${addDays(ymdStr, 1)}T00:00:00${KST}`);
   const moon = SunCalc.getMoonIllumination(mid);
   const fc = scoreNight(data, site, ymdStr);
-  if (fc && fc.score != null && fc.hours.filter((h) => h.n > 0).length >= 8) {
+  if (!statOnly && fc && fc.score != null && fc.hours.filter((h) => h.n > 0).length >= 8) {
     return { ymd: ymdStr, score: fc.score, kind: "예보", moon, clear: null, dark: null };
   }
   const c = data.climate;
@@ -60,9 +60,12 @@ function dateOf(ymdStr) {
   return new Date(`${ymdStr}T12:00:00${KST}`);
 }
 
-function badge(score, extra = "") {
-  const [r, g, b] = scoreColor(score);
-  return `<span class="ns ${extra}" style="background:rgba(${r},${g},${b},.95)">${score ?? "-"}</span>`;
+// 예보는 점수, 통계는 "좋은 밤일 확률 %"로 구분해서 보여줌
+function badge(score, kind = "예보") {
+  const shown = kind === "통계" ? Math.min(100, score * 1.6) : score; // 색 기준만 맞춤
+  const [r, g, b] = scoreColor(shown);
+  const txt = score == null ? "-" : kind === "통계" ? `${score}%` : score;
+  return `<span class="ns${kind === "통계" ? " stat" : ""}" style="background:rgba(${r},${g},${b},.95)">${txt}</span>`;
 }
 
 // ---------- 학기 ----------
@@ -87,7 +90,7 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
       const top = [...nights].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5);
       const strip = nights
         .map((n) => {
-          const [r, g, b] = scoreColor(n.score);
+          const [r, g, b] = scoreColor(n.kind === "통계" ? n.score * 1.6 : n.score);
           const d = dateOf(n.ymd);
           return `<button class="strip-cell${top.includes(n) ? " top" : ""}" data-ymd="${n.ymd}" title="${d.getUTCMonth() + 1}/${d.getUTCDate()} (${WD[d.getUTCDay()]}) · ${n.score}점 · ${n.kind}" style="background:rgba(${r},${g},${b},.9)"></button>`;
         })
@@ -102,12 +105,12 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
           return `<button class="pick" data-ymd="${n.ymd}">
             <span class="rank">${k + 1}</span>
             <span class="pd"><b>${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WD[d.getUTCDay()]}) 밤</b><small>${why}</small></span>
-            ${moonIcon(n.moon.phase, 16)}${badge(n.score)}</button>`;
+            ${moonIcon(n.moon.phase, 16)}${badge(n.score, n.kind)}</button>`;
         })
         .join("");
       return `<section class="sem"><h3>${sem.name} MT 추천 주말</h3>
         <div class="strip">${strip}</div>
-        <div class="strip-legend"><span>${sem.start.slice(5).replace("-", "/")}</span><span>금·토 밤</span><span>${sem.end.slice(5).replace("-", "/")}</span></div>
+        <div class="strip-legend"><span>${(sem.start > todayYmd ? sem.start : todayYmd).slice(5).replace("-", "/")}</span><span>금·토 밤</span><span>${sem.end.slice(5).replace("-", "/")}</span></div>
         ${list}</section>`;
     })
     .join("");
@@ -127,7 +130,7 @@ export function renderMonth(box, data, site, ym, todayYmd, onPick, onMove) {
     const ds = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const n = nightOutlook(data, site, ds);
     const past = ds < todayYmd;
-    const [r, g, b] = scoreColor(n.score);
+    const [r, g, b] = scoreColor(n.kind === "통계" ? n.score * 1.6 : n.score);
     cells += `<button class="cal${past ? " past" : ""}${n.kind === "예보" ? " fc" : ""}${ds === todayYmd ? " today" : ""}" data-ymd="${ds}"
       title="${m}/${d} 밤 · ${n.score}점 (${n.kind})" style="--c:rgba(${r},${g},${b},.9)">
       <span class="cd">${d}</span>${moonIcon(n.moon.phase, 12)}<span class="cs">${n.score ?? ""}</span></button>`;
@@ -164,7 +167,7 @@ export function renderYear(box, data, site, todayYmd, onPickMonth) {
       const ds = `${yy}-${String(mi + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const wd = dateOf(ds).getUTCDay();
       if (wd !== 5 && wd !== 6) continue;
-      const o = nightOutlook(data, site, ds);
+      const o = nightOutlook(data, site, ds, true);
       bestScore = Math.max(bestScore, o.score ?? 0);
       if (o.dark != null && o.dark > 0.8) darkWeekends++;
     }
@@ -176,7 +179,7 @@ export function renderYear(box, data, site, todayYmd, onPickMonth) {
       <span class="ybar"><span style="width:${pct}%;background:rgba(${r},${g},${b},.9)"></span></span>
       <span class="yp">${pct}%</span>
       <span class="yd" title="달 없는 금·토 밤">${darkWeekends}회</span>
-      ${badge(bestScore)}</button>`;
+      ${badge(bestScore, "통계")}</button>`;
   }
   box.innerHTML = `
     <p class="lead">영천 보현산의 ${c.years[0]}~${c.years[1]}년 밤 구름 기록으로 낸 <b>맑은 밤 확률</b>입니다. 오른쪽은 달 없는 금·토 밤 수와 그 달 최고 MT 점수.</p>
@@ -188,7 +191,7 @@ export function renderYear(box, data, site, todayYmd, onPickMonth) {
 function note(data) {
   const c = data.climate;
   return c
-    ? `<p class="hint">맑은 밤 = 21시~03시 평균 구름 ${c.clear_limit}% 미만. 통계 점수 = 맑은 밤 확률 × 달빛 없는 정도. 7일 안쪽은 실제 예보 점수.</p>`
+    ? `<p class="hint">숫자만 있는 칸은 7일 안쪽 실제 예보 점수(0~100), %가 붙은 칸은 10년 통계로 낸 "좋은 밤일 확률"(맑은 밤 확률 × 달빛 없는 정도)이에요. 맑은 밤 = 21시~03시 평균 구름 ${c.clear_limit}% 미만.</p>`
     : "";
 }
 

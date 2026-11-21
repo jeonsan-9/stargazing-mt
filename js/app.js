@@ -276,13 +276,13 @@ function updateLighting() {
   const moonLight = moonAlt > 0 ? ill * Math.min(1, (moonAlt + 2) / 30) : 0;
   const twilight = sunAlt > -18 ? Math.min(1, (sunAlt + 18) / 18) : 0;
 
-  const dark = [34, 42, 66];
-  const moonlit = [214, 224, 255];
+  const dark = [26, 32, 54];
+  const moonlit = [120, 136, 186];
   const dusk = [255, 190, 150];
   let hi = mix(dark, moonlit, moonLight);
   if (twilight > 0) hi = mix(hi, dusk, twilight * 0.6);
   map.setPaintProperty("hillshade", "hillshade-highlight-color", rgb(hi));
-  map.setPaintProperty("hillshade", "hillshade-exaggeration", 0.55 + 0.45 * Math.max(moonLight, twilight));
+  map.setPaintProperty("hillshade", "hillshade-exaggeration", 0.4 + 0.3 * Math.max(moonLight, twilight));
   map.setPaintProperty("hillshade", "hillshade-illumination-anchor", "map");
   map.setPaintProperty(
     "hillshade",
@@ -344,7 +344,7 @@ function renderLayers() {
       id: "sites",
       data: visible,
       diskResolution: 32,
-      radius: 1800,
+      radius: 1100,
       extruded: true,
       pickable: true,
       getPosition: (r) => [r.site.lon, r.site.lat, siteZ(r)],
