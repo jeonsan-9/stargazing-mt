@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>별보러 MT</title>
+  <meta name="description" content="여러 기상 모델을 종합해 동아리 관측 MT 날짜와 장소를 고르는 3D 지도" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.38/dist.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside id="panel">
+    <header>
+      <h1>별보러 MT</h1>
+      <p id="status">예보 불러오는 중…</p>
+    </header>
+
+    <section>
+      <h2>관측할 밤</h2>
+      <div id="nights"></div>
+    </section>
+
+    <section>
+      <h2>관측지 점수</h2>
+      <div id="list"></div>
+      <label class="check"><input type="checkbox" id="toggleExtra" checked /> 비교용 후보도 보기</label>
+    </section>
+  </aside>
+
+  <aside id="detailPanel">
+    <button id="closeDetail" aria-label="닫기">×</button>
+    <div id="detail"></div>
+  </aside>
+
+  <div id="controls">
+    <div class="row">
+      <label class="check"><input type="checkbox" id="toggleCloud" checked /> 구름</label>
+      <select id="cloudModel" aria-label="구름 지도 모델"></select>
+      <button id="toggle3d">평면 보기</button>
+    </div>
+    <div class="row">
+      <input type="range" id="hour" min="0" max="12" value="4" aria-label="시각" />
+      <span id="hourLabel"></span>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
