@@ -50,10 +50,14 @@ export function nightOutlook(data, site, ymdStr, statOnly = false) {
   }
   const c = data.climate;
   if (!c) return { ymd: ymdStr, score: null, kind: "-", moon };
-  const clear = c.doy_clear[dayOfYear(ymdStr)] ?? 0;
+  const i = dayOfYear(ymdStr);
+  const clear = c.doy_clear[i] ?? 0;
+  const rain = c.doy_rain?.[i] ?? null;
+  // 좋은 밤 = 10년 중 비가 안 오고(12시~다음날 06시) 밤하늘이 맑았던 비율
+  const good = c.doy_good?.[i] ?? clear;
   const dark = moonDarkness(ymdStr, site.lat, site.lon);
-  const score = Math.round(100 * clear * (0.3 + 0.7 * dark));
-  return { ymd: ymdStr, score, kind: "통계", moon, clear, dark };
+  const score = Math.round(100 * good * (0.3 + 0.7 * dark));
+  return { ymd: ymdStr, score, kind: "통계", moon, clear, rain, good, dark };
 }
 
 function dateOf(ymdStr) {
@@ -62,7 +66,7 @@ function dateOf(ymdStr) {
 
 // 예보는 점수, 통계는 "좋은 밤일 확률 %"로 구분해서 보여줌
 function badge(score, kind = "예보") {
-  const shown = kind === "통계" ? Math.min(100, score * 1.6) : score; // 색 기준만 맞춤
+  const shown = kind === "통계" ? Math.min(100, score * 1.8) : score; // 색 기준만 맞춤
   const [r, g, b] = scoreColor(shown);
   const txt = score == null ? "-" : kind === "통계" ? `${score}%` : score;
   return `<span class="ns${kind === "통계" ? " stat" : ""}" style="background:rgba(${r},${g},${b},.95)">${txt}</span>`;
@@ -90,9 +94,9 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
       const top = [...nights].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5);
       const strip = nights
         .map((n) => {
-          const [r, g, b] = scoreColor(n.kind === "통계" ? n.score * 1.6 : n.score);
+          const [r, g, b] = scoreColor(n.kind === "통계" ? n.score * 1.8 : n.score);
           const d = dateOf(n.ymd);
-          return `<button class="strip-cell${top.includes(n) ? " top" : ""}" data-ymd="${n.ymd}" title="${d.getUTCMonth() + 1}/${d.getUTCDate()} (${WD[d.getUTCDay()]}) · ${n.score}점 · ${n.kind}" style="background:rgba(${r},${g},${b},.9)"></button>`;
+          return `<button class="strip-cell${top.includes(n) ? " top" : ""}" data-ymd="${n.ymd}" title="${d.getUTCMonth() + 1}/${d.getUTCDate()} (${WD[d.getUTCDay()]}) · ${n.kind === "통계" ? `좋은 밤 ${n.score}%${n.rain != null ? ` · 비 ${Math.round(n.rain * 100)}%` : ""}` : `${n.score}점 (예보)`}" style="background:rgba(${r},${g},${b},.9)"></button>`;
         })
         .join("");
       const list = top
@@ -101,7 +105,7 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
           const why =
             n.kind === "예보"
               ? "모델 예보 기준"
-              : `맑은 밤 확률 ${Math.round(n.clear * 100)}% · 달 없는 시간 ${Math.round(n.dark * 100)}%`;
+              : `${n.rain != null ? `비 올 확률 ${Math.round(n.rain * 100)}% · ` : ""}맑은 밤 ${Math.round(n.clear * 100)}% · 달 없는 시간 ${Math.round(n.dark * 100)}%`;
           return `<button class="pick" data-ymd="${n.ymd}">
             <span class="rank">${k + 1}</span>
             <span class="pd"><b>${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WD[d.getUTCDay()]}) 밤</b><small>${why}</small></span>
@@ -130,17 +134,17 @@ export function renderMonth(box, data, site, ym, todayYmd, onPick, onMove) {
     const ds = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const n = nightOutlook(data, site, ds);
     const past = ds < todayYmd;
-    const [r, g, b] = scoreColor(n.kind === "통계" ? n.score * 1.6 : n.score);
+    const [r, g, b] = scoreColor(n.kind === "통계" ? n.score * 1.8 : n.score);
     cells += `<button class="cal${past ? " past" : ""}${n.kind === "예보" ? " fc" : ""}${ds === todayYmd ? " today" : ""}" data-ymd="${ds}"
-      title="${m}/${d} 밤 · ${n.score}점 (${n.kind})" style="--c:rgba(${r},${g},${b},.9)">
-      <span class="cd">${d}</span>${moonIcon(n.moon.phase, 12)}<span class="cs">${n.score ?? ""}${n.kind === "통계" ? "<small>%</small>" : ""}</span></button>`;
+      title="${m}/${d} 밤 · ${n.kind === "통계" ? `좋은 밤 ${n.score}%${n.rain != null ? ` · 비 올 확률 ${Math.round(n.rain * 100)}%` : ""}` : `${n.score}점 (예보)`}" style="--c:rgba(${r},${g},${b},.9)">
+      <span class="cd">${d}</span>${n.rain != null && n.rain >= 0.35 && !past ? '<span class="cr" title="비 잦은 시기">☂</span>' : ""}${moonIcon(n.moon.phase, 12)}<span class="cs">${n.score ?? ""}${n.kind === "통계" ? "<small>%</small>" : ""}</span></button>`;
   }
   const mm = data.climate?.by_month?.[m - 1];
   box.innerHTML = `
     <div class="cal-head"><button data-move="-1" aria-label="이전 달">‹</button><b>${y}년 ${m}월</b><button data-move="1" aria-label="다음 달">›</button></div>
-    ${mm ? `<p class="lead">영천 ${m}월 맑은 밤 확률 <b>${Math.round(mm.clear * 100)}%</b> · 평균 밤 구름 ${Math.round(mm.cloud)}%</p>` : ""}
+    ${mm ? `<p class="lead">영천 ${m}월 · 비 온 날 평균 <b>${mm.rain_days ?? "-"}일</b> (비 올 확률 ${mm.rain != null ? Math.round(mm.rain * 100) : "-"}%) · 맑은 밤 ${Math.round(mm.clear * 100)}% · 평균 밤 구름 ${Math.round(mm.cloud)}%</p>` : ""}
     <div class="cal-grid">${WD.map((w) => `<span class="cal-wd">${w}</span>`).join("")}${cells}</div>
-    <div class="cal-legend"><span><i class="fc-dot"></i>테두리 = 모델 예보</span><span>나머지 = 10년 통계 + 월령</span></div>
+    <div class="cal-legend"><span><i class="fc-dot"></i>테두리 = 모델 예보</span><span>☂ = 10년 중 비 잦은 날</span><span>나머지 = 10년 통계 + 월령</span></div>
     ${note(data)}`;
   box.querySelectorAll("[data-ymd]").forEach((el) => (el.onclick = () => onPick(el.dataset.ymd)));
   box.querySelectorAll("[data-move]").forEach((el) => (el.onclick = () => onMove(+el.dataset.move)));
@@ -172,18 +176,20 @@ export function renderYear(box, data, site, todayYmd, onPickMonth) {
       if (o.dark != null && o.dark > 0.8) darkWeekends++;
     }
     const sem = mi >= 2 && mi <= 5 ? "1학기" : mi >= 8 && mi <= 11 ? "2학기" : "방학";
-    const pct = Math.round(mon.clear * 100);
-    const [r, g, b] = scoreColor(pct * 1.6);
+    const pct = Math.round((mon.good ?? mon.clear) * 100);
+    const rainPct = mon.rain != null ? Math.round(mon.rain * 100) : null;
+    const [r, g, b] = scoreColor(pct * 1.8);
     rows += `<button class="yr${sem === "방학" ? " off" : ""}" data-ym="${yy}-${String(mi + 1).padStart(2, "0")}">
       <span class="ym">${mi + 1}월<small>${sem}</small></span>
       <span class="ybar"><span style="width:${pct}%;background:rgba(${r},${g},${b},.9)"></span></span>
       <span class="yp">${pct}%</span>
+      <span class="yd rain${rainPct != null && rainPct >= 35 ? " wet" : ""}" title="비 온 날 평균 ${mon.rain_days ?? "-"}일">${rainPct != null ? rainPct + "%" : "-"}</span>
       <span class="yd" title="달 없는 금·토 밤">${darkWeekends}회</span>
       ${badge(bestScore, "통계")}</button>`;
   }
   box.innerHTML = `
-    <p class="lead">영천 보현산의 ${c.years[0]}~${c.years[1]}년 밤 구름 기록으로 낸 <b>맑은 밤 확률</b>입니다. 오른쪽은 달 없는 금·토 밤 수와 그 달 최고 MT 점수.</p>
-    <div class="yr-head"><span></span><span>맑은 밤 확률</span><span></span><span>그믐 주말</span><span>최고</span></div>
+    <p class="lead">영천 보현산의 ${c.years[0]}~${c.years[1]}년 기록으로 낸 <b>좋은 밤 확률</b>(비 안 오고 밤하늘 맑음)입니다. 오른쪽은 비 올 확률, 달 없는 금·토 밤 수, 그 달 최고 MT 점수.</p>
+    <div class="yr-head"><span></span><span>좋은 밤 확률</span><span></span><span>비</span><span>그믐 주말</span><span>최고</span></div>
     ${rows}${note(data)}`;
   box.querySelectorAll("[data-ym]").forEach((el) => (el.onclick = () => onPickMonth(el.dataset.ym)));
 }
@@ -191,7 +197,7 @@ export function renderYear(box, data, site, todayYmd, onPickMonth) {
 function note(data) {
   const c = data.climate;
   return c
-    ? `<p class="hint">숫자만 있는 칸은 7일 안쪽 실제 예보 점수(0~100), %가 붙은 칸은 10년 통계로 낸 "좋은 밤일 확률"(맑은 밤 확률 × 달빛 없는 정도)이에요. 맑은 밤 = 21시~03시 평균 구름 ${c.clear_limit}% 미만.</p>`
+    ? `<p class="hint">숫자만 있는 칸은 7일 안쪽 실제 예보 점수(0~100), %가 붙은 칸은 10년 통계로 낸 "좋은 밤일 확률"(비 안 오고 맑은 밤일 확률 × 달빛 없는 정도)이에요. 맑은 밤 = 21시~03시 평균 구름 ${c.clear_limit}% 미만, 비 온 날 = 12시~다음날 06시 강수 ${c.rain_limit ?? 1}mm 이상.</p>`
     : "";
 }
 

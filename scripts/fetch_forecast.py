@@ -380,6 +380,9 @@ CLIMATE_YEARS = (2016, 2025)
 CLEAR_LIMIT = 30  # 밤 평균 구름 30% 미만이면 "맑은 밤"
 
 
+RAIN_LIMIT = 1.0  # 그날 12시~다음날 06시(이동+관측) 강수 합 1mm 이상이면 "비 온 날"
+
+
 def fetch_climate(site):
     y0, y1 = CLIMATE_YEARS
     data = get_json(
@@ -389,59 +392,72 @@ def fetch_climate(site):
             "longitude": site["lon"],
             "start_date": f"{y0}-01-01",
             "end_date": f"{y1}-12-31",
-            "hourly": "cloud_cover",
+            "hourly": "cloud_cover,precipitation",
             "timezone": "Asia/Seoul",
         },
     )
     times = data["hourly"]["time"]
     cloud = data["hourly"]["cloud_cover"]
-    # 밤 = 그날 21시 ~ 다음날 03시
-    nights = {}
-    for t, c in zip(times, cloud):
-        if c is None:
-            continue
+    precip = data["hourly"].get("precipitation") or [None] * len(times)
+    # 밤 구름 = 그날 21시 ~ 다음날 03시, 비 = 그날 12시 ~ 다음날 06시
+    nights, rains = {}, {}
+    for t, c, p in zip(times, cloud, precip):
         d = datetime.strptime(t, "%Y-%m-%dT%H:%M")
-        if d.hour >= 21:
-            key = d.date()
-        elif d.hour <= 3:
-            key = (d - timedelta(days=1)).date()
-        else:
-            continue
-        nights.setdefault(key, []).append(c)
-    # 1년 중 날짜(월-일)별로 모음 (2월 29일은 28일에 합침)
+        key = d.date() if d.hour >= 12 else (d - timedelta(days=1)).date()
+        if p is not None and (d.hour >= 12 or d.hour < 6):
+            rains[key] = rains.get(key, 0.0) + p
+        if c is not None and (d.hour >= 21 or d.hour <= 3):
+            nights.setdefault(key, []).append(c)
+
+    def md_of(day):
+        return (day.month, min(day.day, 28) if day.month == 2 else day.day)
+
+    # 1년 중 날짜(월-일)별로 (구름 평균, 비 온 날 여부) 모음
     by_md = {}
     for day, vals in nights.items():
-        if len(vals) < 5:
+        if len(vals) < 5 or day not in rains:
             continue
-        md = (day.month, min(day.day, 28) if day.month == 2 else day.day)
-        mean = sum(vals) / len(vals)
-        by_md.setdefault(md, []).append(mean)
+        by_md.setdefault(md_of(day), []).append((sum(vals) / len(vals), rains[day] >= RAIN_LIMIT))
+
+    def summarize(pool):
+        if not pool:
+            return None
+        n = len(pool)
+        return {
+            "clear": round(sum(1 for c, _ in pool if c < CLEAR_LIMIT) / n, 3),
+            "rain": round(sum(1 for _, r in pool if r) / n, 3),
+            # 좋은 밤 = 비 안 오고 밤하늘 맑음
+            "good": round(sum(1 for c, r in pool if c < CLEAR_LIMIT and not r) / n, 3),
+            "cloud": round(sum(c for c, _ in pool) / n, 1),
+        }
+
     ref = datetime(2025, 1, 1)
-    doy_clear, doy_cloud = [], []
+    doy = {"clear": [], "rain": [], "good": [], "cloud": []}
     for k in range(365):
         d = ref + timedelta(days=k)
         # 앞뒤 7일을 합쳐 매끄럽게
         pool = []
         for off in range(-7, 8):
-            dd = d + timedelta(days=off)
-            pool += by_md.get((dd.month, min(dd.day, 28) if dd.month == 2 else dd.day), [])
-        doy_clear.append(round(sum(1 for v in pool if v < CLEAR_LIMIT) / len(pool), 3) if pool else None)
-        doy_cloud.append(round(sum(pool) / len(pool), 1) if pool else None)
+            pool += by_md.get(md_of(d + timedelta(days=off)), [])
+        sm = summarize(pool) or {}
+        for key in doy:
+            doy[key].append(sm.get(key))
     by_month = []
     for m in range(1, 13):
         pool = [v for (mm, _), vs in by_md.items() if mm == m for v in vs]
-        by_month.append(
-            {
-                "clear": round(sum(1 for v in pool if v < CLEAR_LIMIT) / len(pool), 3) if pool else None,
-                "cloud": round(sum(pool) / len(pool), 1) if pool else None,
-            }
-        )
+        sm = summarize(pool) or {"clear": None, "rain": None, "good": None, "cloud": None}
+        # 한 달 평균 비 온 날 수
+        sm["rain_days"] = round(sm["rain"] * len([1 for (mm, dd) in by_md if mm == m]), 1) if sm["rain"] is not None else None
+        by_month.append(sm)
     return {
         "site": site["id"],
         "years": list(CLIMATE_YEARS),
         "clear_limit": CLEAR_LIMIT,
-        "doy_clear": doy_clear,
-        "doy_cloud": doy_cloud,
+        "rain_limit": RAIN_LIMIT,
+        "doy_clear": doy["clear"],
+        "doy_rain": doy["rain"],
+        "doy_good": doy["good"],
+        "doy_cloud": doy["cloud"],
         "by_month": by_month,
     }
 

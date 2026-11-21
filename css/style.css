@@ -173,7 +173,7 @@ table.hourly { border-collapse: separate; border-spacing: 2px; font-size: 11px; 
 .fc-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--accent); margin-right: 4px; vertical-align: -1px; }
 
 /* 1년 */
-.yr-head, .yr { display: grid; grid-template-columns: 52px 1fr 36px 44px 40px; align-items: center; gap: 8px; }
+.yr-head, .yr { display: grid; grid-template-columns: 52px 1fr 36px 34px 44px 40px; align-items: center; gap: 8px; }
 .yr-head { font-size: 10.5px; color: var(--faint); margin-bottom: 2px; }
 .yr { width: 100%; padding: 6px 4px; border: 0; border-radius: 10px; background: transparent; cursor: pointer; text-align: left; }
 .yr:hover { background: rgba(255,255,255,.05); }
@@ -184,3 +184,19 @@ table.hourly { border-collapse: separate; border-spacing: 2px; font-size: 11px; 
 .ybar span { display: block; height: 100%; border-radius: 4px; }
 .yp, .yd { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 .cal .cs small { font-size: 8px; font-weight: 600; color: var(--muted); }
+
+.yd.rain { color: #8fb3e8; }
+.yd.rain.wet { color: #b9d2ff; font-weight: 600; }
+.cal .cr { position: absolute; top: 3px; right: 4px; font-size: 9px; color: #9cc2ff; opacity: .85; }
+
+/* 하늘의 달 */
+#moonGlow { position: fixed; inset: 0; pointer-events: none; z-index: 1; mix-blend-mode: screen; transition: opacity .3s; }
+#skyMoon { position: fixed; left: 0; top: 0; z-index: 2; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  transition: transform .25s ease-out, opacity .4s; --glow: .5; }
+#skyMoon .disc { display: block; line-height: 0; border-radius: 50%;
+  filter: drop-shadow(0 0 calc(6px + 22px * var(--glow)) rgba(255, 244, 210, calc(.25 + .5 * var(--glow)))); }
+#skyMoon .tag { font-size: 11px; letter-spacing: .04em; color: #d9def0; background: rgba(8,12,26,.55); padding: 2px 8px; border-radius: 99px;
+  backdrop-filter: blur(6px); white-space: nowrap; }
+#skyMoon.down { opacity: .28; }
+#skyMoon.down .disc { filter: grayscale(.6); }
+#skyMoon.behind { opacity: .6; }

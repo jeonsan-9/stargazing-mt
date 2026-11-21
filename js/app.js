@@ -40,6 +40,13 @@ const map = new maplibregl.Map({
   pitch: 62,
   bearing: -20,
   maxPitch: 75,
+  // 한국만: 범위 밖으로 끌거나 너무 멀리 축소하지 못하게
+  maxBounds: [
+    [122.6, 31.6],
+    [133.2, 39.6],
+  ],
+  minZoom: 6.2,
+  renderWorldCopies: false,
   attributionControl: { compact: true },
 });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
@@ -128,6 +135,7 @@ map.on("load", () => {
     "fog-ground-blend": 0.4,
   });
   apply3D();
+  addKoreaMask();
   updateLighting();
 });
 
@@ -188,6 +196,33 @@ function noiseCanvas(w, h) {
   return c;
 }
 
+let cloudMask = null;
+function koreaCloudMask(W, H, g) {
+  if (cloudMask && cloudMask.width === W && cloudMask.height === H) return cloudMask;
+  const half = Math.abs(g.lons[1] - g.lons[0]) / 2;
+  const w = g.lons[0] - half;
+  const e = g.lons[g.lons.length - 1] + half;
+  const n = Math.max(g.lats[0], g.lats[g.lats.length - 1]) + half;
+  const s = Math.min(g.lats[0], g.lats[g.lats.length - 1]) - half;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fillRect(0, 0, W, H);
+  ctx.filter = "blur(18px)";
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  KOREA_RING.forEach(([lon, lat], k) => {
+    const x = ((lon - w) / (e - w)) * W;
+    const y = ((n - lat) / (n - s)) * H;
+    k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.fill();
+  cloudMask = c;
+  return c;
+}
+
 function cloudImageAt(hourIdx) {
   const g = state.data?.grid;
   const field = cloudField(hourIdx);
@@ -227,6 +262,8 @@ function cloudImageAt(hourIdx) {
   // 구름 질감: 미리 만든 잡음으로 가장자리를 뭉게뭉게하게
   big.globalCompositeOperation = "destination-in";
   big.drawImage(noiseCanvas(cloudCanvas.width, cloudCanvas.height), 0, 0);
+  // 한국 밖 구름은 옅게 (지도 마스크와 맞춤)
+  big.drawImage(koreaCloudMask(cloudCanvas.width, cloudCanvas.height, g), 0, 0);
   big.globalCompositeOperation = "source-over";
   cloudKey = key;
   cloudCache.set(key, cloudCanvas);
@@ -257,11 +294,96 @@ function cloudBounds(z) {
   ];
 }
 
+// ---------- 한국 밖 가리기 ----------
+// 남한 육지와 가까운 바다(제주, 울릉도 포함)만 밝게 두고 나머지는 어둡게 덮음
+const KOREA_RING = [
+  [125.6, 37.6], [126.1, 37.75], [126.65, 37.95], [127.1, 38.3], [128.0, 38.33], [128.32, 38.62],
+  [128.9, 38.6], [131.1, 37.8], [131.1, 37.2], [129.8, 35.6], [129.45, 35.0], [128.7, 34.6],
+  [127.6, 34.1], [126.95, 33.15], [126.45, 32.95], [126.05, 33.15], [125.9, 33.6], [125.0, 34.0],
+  [124.5, 34.8], [125.6, 36.0], [125.5, 36.8], [125.6, 37.6],
+];
+
+function addKoreaMask() {
+  map.addSource("korea-mask", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [[100, 20], [160, 20], [160, 50], [100, 50], [100, 20]],
+          [...KOREA_RING].reverse(),
+        ],
+      },
+    },
+  });
+  // 라벨보다 위에 올려 일본·중국·북한 지명도 함께 흐리게
+  map.addLayer({ id: "korea-mask", type: "fill", source: "korea-mask", paint: { "fill-color": "#04060d", "fill-opacity": 0.78, "fill-antialias": false } });
+}
+
+// ---------- 하늘의 달 ----------
+// 화면 위쪽 하늘 띠에 달을 띄움. 가로 위치 = 카메라가 보는 방향 대비 달 방위, 세로 위치 = 고도
+function moonDisc(phase, size) {
+  const r = 50;
+  const k = Math.cos(phase * 2 * Math.PI);
+  const waxing = phase < 0.5;
+  const rx = Math.abs(k) * r;
+  const outer = waxing ? 1 : 0;
+  const inner = k > 0 ? (waxing ? 0 : 1) : waxing ? 1 : 0;
+  const lit = `M ${r} 0 A ${r} ${r} 0 0 ${outer} ${r} ${2 * r} A ${rx} ${r} 0 0 ${inner} ${r} 0 Z`;
+  const craters = [[34, 30, 9], [62, 44, 6], [44, 64, 11], [70, 70, 5], [28, 52, 4], [58, 22, 4]]
+    .map(([x, y, cr]) => `<circle cx="${x}" cy="${y}" r="${cr}" fill="rgba(120,110,80,.18)"/>`)
+    .join("");
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">
+    <defs><clipPath id="mclip"><path d="${lit}"/></clipPath>
+    <radialGradient id="mg" cx="40%" cy="38%" r="70%"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#e9dcb0"/></radialGradient></defs>
+    <circle cx="50" cy="50" r="50" fill="rgba(150,165,210,.10)"/>
+    <g clip-path="url(#mclip)"><circle cx="50" cy="50" r="50" fill="url(#mg)"/>${craters}</g>
+  </svg>`;
+}
+
+let lastMoonKey = "";
+function updateSkyMoon(info) {
+  const el = $("skyMoon");
+  if (!el || !info) return;
+  const { az, alt, ill, phase, moonLight } = info;
+  const diff = ((az - map.getBearing() + 540) % 360) - 180; // -180~180, 0 = 정면
+  const w = window.innerWidth;
+  const panelW = w > 760 ? 360 : 0; // 왼쪽 패널 피하기
+  const half = 70; // 화면 좌우 끝 = ±70°
+  const clamped = Math.max(-half, Math.min(half, diff));
+  const x = panelW + ((clamped + half) / (2 * half)) * (w - panelW - 120) + 30;
+  const skyTop = 70;
+  const skyH = Math.max(90, window.innerHeight * 0.22);
+  const y = skyTop + (1 - Math.min(alt, 80) / 80) * skyH;
+  const size = 46 + 10 * ill;
+  const key = `${phase.toFixed(3)}|${Math.round(size)}`;
+  if (key !== lastMoonKey) {
+    el.querySelector(".disc").innerHTML = moonDisc(phase, size);
+    lastMoonKey = key;
+  }
+  el.style.transform = `translate(${x}px, ${y}px)`;
+  el.style.setProperty("--glow", (0.15 + 0.85 * moonLight).toFixed(2));
+  el.classList.toggle("down", alt <= 0);
+  el.classList.toggle("behind", Math.abs(diff) > half);
+  const dirs = ["북", "북동", "동", "남동", "남", "남서", "서", "북서"];
+  const dir = dirs[Math.round(az / 45) % 8];
+  el.querySelector(".tag").textContent =
+    alt > 0 ? `${dir} ${Math.round(alt)}° · ${Math.round(ill * 100)}%${Math.abs(diff) > half ? (diff > 0 ? " →" : " ←") : ""}` : `지평선 아래 · ${Math.round(ill * 100)}%`;
+  // 달빛이 강할수록 화면에 은은한 빛 번짐
+  $("moonGlow").style.opacity = (0.55 * moonLight).toFixed(2);
+  $("moonGlow").style.background = `radial-gradient(60% 50% at ${x + size / 2}px ${y + size / 2}px, rgba(220,228,255,.22), rgba(220,228,255,0) 70%)`;
+}
+
 // ---------- 달빛 조명 ----------
 // 슬라이더 시각의 달 위치(방위, 고도)와 위상으로 지형 음영 방향과 밝기, 하늘색을 바꿈
 const LIGHT_POINT = [36.0, 128.8];
 const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
 const rgb = (c) => `rgb(${c.join(",")})`;
+
+let lastMoon = null;
+map.on("rotate", () => updateSkyMoon(lastMoon));
+window.addEventListener("resize", () => updateSkyMoon(lastMoon));
 
 function updateLighting() {
   if (!state.data || !map.getLayer("hillshade")) return;
@@ -269,7 +391,8 @@ function updateLighting() {
   const [lat, lon] = LIGHT_POINT;
   const mp = SunCalc.getMoonPosition(t, lat, lon);
   const sp = SunCalc.getPosition(t, lat, lon);
-  const ill = SunCalc.getMoonIllumination(t).fraction;
+  const illum = SunCalc.getMoonIllumination(t);
+  const ill = illum.fraction;
   const moonAlt = (mp.altitude * 180) / Math.PI;
   const sunAlt = (sp.altitude * 180) / Math.PI;
   const az = ((mp.azimuth * 180) / Math.PI + 180 + 360) % 360; // 북=0, 시계방향
@@ -299,6 +422,8 @@ function updateLighting() {
     "horizon-fog-blend": 0.6,
     "fog-ground-blend": 0.4,
   });
+  lastMoon = { az, alt: moonAlt, ill, phase: illum.phase, moonLight };
+  updateSkyMoon(lastMoon);
   const dir = ["북", "북동", "동", "남동", "남", "남서", "서", "북서"][Math.round(az / 45) % 8];
   $("moonLabel").textContent =
     moonAlt > 0 ? `달 ${dir}쪽 ${Math.round(moonAlt)}° · ${Math.round(ill * 100)}%` : sunAlt > -18 ? "박명" : "달 없음";
