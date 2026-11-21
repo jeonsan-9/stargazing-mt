@@ -53,7 +53,7 @@
   <canvas id="scene"></canvas>
   <div id="moon" hidden><canvas width="144" height="144" role="img" aria-label="달의 위상"></canvas><span></span></div>
   <div id="pins"></div>
-  <header><h1>AAA 징크스 타파기</h1><small>계명대학교 천체관측 동아리</small><br><a href="./index.html">전체 예보</a></header>
+  <header><h1>AAA 징크스 타파기</h1><small>계명대학교 천체관측 동아리</small><br><a href="./index.html">전체 예보</a> · <a id="observe-link" href="./observe.html">관측 도구</a></header>
   <aside id="site-detail" aria-labelledby="site-title" hidden>
     <div class="title"><h2 id="site-title" tabindex="-1"></h2><button id="close-site" type="button">닫기</button></div>
     <p id="site-summary"></p>
@@ -112,6 +112,10 @@
     }
 
     function siteDetail(index, time = times[index] ? parseLocal(times[index]) : validRequest ?? new Date()) {
+      const selectedDay = ymd(time);
+      const day = (time.getUTCHours() + 9) % 24 < 6 ? addDays(selectedDay, -1) : selectedDay;
+      const observeParams = new URLSearchParams({site: selection?.id ?? "bohyeon_obs", day});
+      document.getElementById("observe-link").href = `./observe.html?${observeParams}`;
       if (!selection) return;
       document.getElementById("site-title").textContent = selection.name;
       const hour = weather(selection, index);
@@ -135,8 +139,6 @@
       table.tBodies[0].replaceChildren(...rows);
       table.hidden = rows.length === 0;
 
-      const selectedDay = ymd(time);
-      const day = (time.getUTCHours() + 9) % 24 < 6 ? addDays(selectedDay, -1) : selectedDay;
       const key = `${selection.id}:${day}:${Boolean(data)}`;
       if (activeNight?.key !== key) {
         const sky = nightSky(day, selection);
@@ -203,6 +205,7 @@
       opener?.focus();
       selection = undefined;
       panel.hidden = true;
+      siteDetail(+slider.value);
     }
     document.getElementById("close-site").addEventListener("click", closeSite);
     panel.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSite(); });

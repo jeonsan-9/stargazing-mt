@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>관측 도구 · AAA 징크스 타파기</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap">
+  <link rel="stylesheet" href="css/observe.css">
+  <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <a href="./index.html">← 기본 지도</a>
+      <h1>관측 도구</h1>
+    </header>
+    <div class="layout">
+      <section aria-labelledby="search-title">
+        <h2 id="search-title">천체 찾기</h2>
+        <div class="fields">
+          <label>관측지<select id="site"></select></label>
+          <label>관측 날짜<input id="night" type="date" min="1800-01-01" max="2050-12-31" required></label>
+          <label>검색<input id="search" type="search" placeholder="M31, NGC 224, 목성"></label>
+          <label>대상<select id="target"></select></label>
+        </div>
+        <p id="search-status" class="hint" role="status"></p>
+        <figure>
+          <canvas id="altitude" width="604" height="235" role="img" aria-label="태양, 달과 선택한 천체의 고도"></canvas>
+          <figcaption><span class="sun">해</span><span class="moon">달</span><span class="target">대상</span> · 음영은 달 없는 어둠</figcaption>
+        </figure>
+        <label class="scrub">시각 <output id="at-time" for="scrub"></output>
+          <input id="scrub" type="range" min="0" max="144" step="1" value="48">
+        </label>
+        <dl class="metrics">
+          <div><dt>고도</dt><dd id="alt"></dd></div>
+          <div><dt>방위</dt><dd id="az"></dd></div>
+          <div><dt>달과 각거리</dt><dd id="separation"></dd></div>
+        </dl>
+        <p id="best" class="hint"></p>
+        <p id="crossings" class="hint"></p>
+      </section>
+      <section aria-labelledby="frame-title">
+        <h2 id="frame-title">촬영 화각</h2>
+        <div class="fields">
+          <label>센서<select id="sensor">
+            <option value="full">풀프레임 · 36 × 24 mm</option>
+            <option value="aps" selected>APS-C · 23.5 × 15.6 mm</option>
+            <option value="mft">마이크로 포서드 · 17.3 × 13 mm</option>
+            <option value="custom">직접 입력</option>
+          </select></label>
+          <label>초점거리 (mm)<input id="focal" type="number" min="1" max="20000" step="any" value="400" inputmode="decimal"></label>
+        </div>
+        <div id="sensor-size" class="fields" hidden>
+          <label>센서 가로 (mm)<input id="sensor-width" type="number" min="0.1" max="200" step="any" value="23.5"></label>
+          <label>센서 세로 (mm)<input id="sensor-height" type="number" min="0.1" max="200" step="any" value="15.6"></label>
+        </div>
+        <label class="scrub">대상 장축 기준 회전 <output id="rotation" for="angle">0°</output>
+          <input id="angle" type="range" min="-90" max="90" value="0">
+        </label>
+        <figure>
+          <canvas id="framing" width="604" height="340" role="img" aria-label="선택한 천체와 카메라 프레임의 크기 비교"></canvas>
+          <figcaption><span class="moon">카메라 프레임</span><span class="target">대상 외곽</span> · 크기 비교용</figcaption>
+        </figure>
+        <p id="frame-result" class="result" aria-live="polite"></p>
+        <p id="target-size" class="hint"></p>
+        <details>
+          <summary>대상 각크기 직접 입력</summary>
+          <div class="fields">
+            <label>장축 (각분)<input id="major" type="number" min="0.001" max="6000" step="any"></label>
+            <label>단축 (각분)<input id="minor" type="number" min="0.001" max="6000" step="any"></label>
+          </div>
+        </details>
+      </section>
+    </div>
+    <footer>하늘 위치와 각크기는 계획용 근사치입니다. 각크기 자료 <a href="https://github.com/mattiaverga/OpenNGC">OpenNGC</a> · 데이터 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> · 행성 크기 <a href="https://nssdc.gsfc.nasa.gov/planetary/factsheet/">NASA</a></footer>
+  </main>
+  <script type="module" src="js/observe.js"></script>
+</body>
+</html>

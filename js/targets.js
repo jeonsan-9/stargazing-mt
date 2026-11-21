@@ -144,6 +144,68 @@ function sep(a1, d1, a2, d2) {
   return Math.acos(Math.max(-1, Math.min(1, c))) * DEG;
 }
 
+// Representative NGC IDs and major/minor axes (arcmin) from OpenNGC, Mattia Verga,
+// https://github.com/mattiaverga/OpenNGC (CC BY-SA 4.0). Equal axes are used for
+// clusters with a single catalog diameter. Pairs without a combined size stay unset.
+const DSOSIZES = {
+  M1: ["NGC 1952", 8, 4], M3: ["NGC 5272", 16.2, 16.2], M5: ["NGC 5904", 15, 15],
+  M8: ["NGC 6523", 45, 30], M11: ["NGC 6705", 9, 9], M13: ["NGC 6205", 16.5, 16.5],
+  M15: ["NGC 7078", 11.1, 11.1], M17: ["NGC 6618", 12.6], M22: ["NGC 6656", 12.6, 12.6],
+  M27: ["NGC 6853", 6.7], M31: ["NGC 224", 177.83, 69.66], M33: ["NGC 598", 62.09, 36.73],
+  M35: ["NGC 2168", 24, 24], M37: ["NGC 2099", 11.4, 11.4], M42: ["NGC 1976", 90, 60],
+  M44: ["NGC 2632", 108.6, 108.6], M51: ["NGC 5194", 13.71, 11.67], M57: ["NGC 6720", 1.27],
+  M92: ["NGC 6341", 14.4, 14.4], M104: ["NGC 4594", 8.45, 4.91],
+  "NGC 7000": ["", 120, 30], "NGC 457": ["", 7.8, 7.8],
+};
+
+// Equatorial radii in km, NASA Planetary Fact Sheets.
+const PLANET_RADII = { mercury: 2440.5, venus: 6051.8, mars: 3396.2, jupiter: 71492,
+  saturn: 60268, uranus: 25559, neptune: 24764 };
+
+export const observingTargets = [
+  { id: "moon", name: "달", kind: "달", aliases: ["Moon"] },
+  ...PLANETS.map(({ id, name }) => ({ id, name, kind: "행성", aliases: [id] })),
+  { id: "M81", name: "보데 은하", ra: 9.92588, dec: 69.06531, kind: "은하", aliases: ["M81", "NGC 3031"], size: [21.63, 11.25] },
+  { id: "M82", name: "시가 은하", ra: 9.93131, dec: 69.67939, kind: "은하", aliases: ["M82", "NGC 3034"], size: [10.99, 5.11] },
+  { id: "NGC 869", name: "페르세우스 h 성단", ra: 2.31627, dec: 57.11725, kind: "성단", aliases: ["NGC 869"], size: [14.4, 14.4] },
+  { id: "NGC 884", name: "페르세우스 χ 성단", ra: 2.37558, dec: 57.14411, kind: "성단", aliases: ["NGC 884"], size: [10.5, 10.5] },
+  ...DSO.map(([id, name, ra, dec, , kind]) => {
+    const [ngc, major, minor] = DSOSIZES[id] ?? [];
+    const aliases = [id, ngc].filter(Boolean);
+    return { id, name, ra, dec, kind, aliases, size: major && minor ? [major, minor] : null };
+  }),
+];
+
+function catalogKey(value) {
+  return value.normalize("NFKC").toLowerCase().replace(/\s+/g, "")
+    .replace(/^messier/, "m").replace(/^(m|ngc|ic)0+(?=\d)/, "$1");
+}
+
+export function searchObservingTargets(query) {
+  const key = catalogKey(query);
+  if (!key) return observingTargets;
+  const matches = observingTargets.filter(({ name, aliases }) => [name, ...aliases]
+    .some((value) => catalogKey(value).includes(key)));
+  return matches.sort((a, b) => Number(b.aliases.some((alias) => catalogKey(alias) === key))
+    - Number(a.aliases.some((alias) => catalogKey(alias) === key)));
+}
+
+export function observeTarget(target, time, { lat, lon }) {
+  const moon = SunCalc.getMoonPosition(time, lat, lon);
+  const moonAlt = moon.altitude * DEG;
+  const moonAz = ((moon.azimuth * DEG) + 540) % 360;
+  const angularSize = (radius, distance) => 120 * DEG * Math.asin(radius / distance);
+  if (target.id === "moon") {
+    const diameter = angularSize(1737.4, moon.distance);
+    return { alt: moonAlt, az: moonAz, moonSeparation: null, size: [diameter, diameter] };
+  }
+  const planet = PLANETS.find((candidate) => candidate.id === target.id);
+  const coords = planet ? planetRaDec(planet, time) : target;
+  const { alt, az } = altAz(coords.ra, coords.dec, time, lat, lon);
+  const diameter = planet ? angularSize(PLANET_RADII[planet.id], coords.dist * 149597870.7) : null;
+  return { alt, az, moonSeparation: sep(az, alt, moonAz, moonAlt), size: diameter ? [diameter, diameter] : target.size };
+}
+
 const DIRS = ["북", "북동", "동", "남동", "남", "남서", "서", "북서"];
 const dirName = (az) => DIRS[Math.round(az / 45) % 8];
 const hhmm = (d) => d.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });

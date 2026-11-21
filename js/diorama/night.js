@@ -49,7 +49,9 @@ export function drawNightSky(canvas, sky, time) {
   }
   labels.forEach((label, i) => ctx.fillText(label, left - 15 + i * (right - left) / 4, h - 11));
   ctx.lineWidth = 4;
-  for (const [body, color] of [["sun", "#efa394"], ["moon", "#ffeac0"]]) {
+  const lines = [["sun", "#efa394"], ["moon", "#ffeac0"]];
+  if (sky.samples[0].target != null) lines.push(["target", "#a4e0ca"]);
+  for (const [body, color] of lines) {
     ctx.strokeStyle = color;
     ctx.beginPath();
     for (const [i, sample] of sky.samples.entries()) {

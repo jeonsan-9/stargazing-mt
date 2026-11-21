@@ -946,6 +946,7 @@ function avg(a) {
 
 function selectSite(id, fly) {
   state.selected = id;
+  updateObserveLink();
   renderList();
   renderDetail();
   document.body.classList.add("detail-open");
@@ -958,12 +959,19 @@ function selectSite(id, fly) {
 
 function setNight(n) {
   state.night = n;
+  updateObserveLink();
   recompute();
   renderNights();
   renderHourSlider();
   renderList();
   renderDetail();
   renderLayers();
+}
+
+function updateObserveLink() {
+  const query = new URLSearchParams({ site: state.selected ?? "bohyeon_obs" });
+  if (state.night) query.set("day", state.night);
+  $("observe-link").href = `./observe.html?${query}`;
 }
 
 // ---------- 컨트롤 ----------
