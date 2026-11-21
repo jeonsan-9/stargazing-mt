@@ -374,6 +374,78 @@ def fetch_kma(site, times):
     return {"cloud": cloud, "rh": rh, "wind": wind}
 
 
+# ---------------- 10년 기후 통계 (ERA5) ----------------
+CLIMATE_SITE = "bohyeon_obs"  # 동아리 MT는 항상 영천
+CLIMATE_YEARS = (2016, 2025)
+CLEAR_LIMIT = 30  # 밤 평균 구름 30% 미만이면 "맑은 밤"
+
+
+def fetch_climate(site):
+    y0, y1 = CLIMATE_YEARS
+    data = get_json(
+        "https://archive-api.open-meteo.com/v1/archive",
+        {
+            "latitude": site["lat"],
+            "longitude": site["lon"],
+            "start_date": f"{y0}-01-01",
+            "end_date": f"{y1}-12-31",
+            "hourly": "cloud_cover",
+            "timezone": "Asia/Seoul",
+        },
+    )
+    times = data["hourly"]["time"]
+    cloud = data["hourly"]["cloud_cover"]
+    # 밤 = 그날 21시 ~ 다음날 03시
+    nights = {}
+    for t, c in zip(times, cloud):
+        if c is None:
+            continue
+        d = datetime.strptime(t, "%Y-%m-%dT%H:%M")
+        if d.hour >= 21:
+            key = d.date()
+        elif d.hour <= 3:
+            key = (d - timedelta(days=1)).date()
+        else:
+            continue
+        nights.setdefault(key, []).append(c)
+    # 1년 중 날짜(월-일)별로 모음 (2월 29일은 28일에 합침)
+    by_md = {}
+    for day, vals in nights.items():
+        if len(vals) < 5:
+            continue
+        md = (day.month, min(day.day, 28) if day.month == 2 else day.day)
+        mean = sum(vals) / len(vals)
+        by_md.setdefault(md, []).append(mean)
+    ref = datetime(2025, 1, 1)
+    doy_clear, doy_cloud = [], []
+    for k in range(365):
+        d = ref + timedelta(days=k)
+        # 앞뒤 7일을 합쳐 매끄럽게
+        pool = []
+        for off in range(-7, 8):
+            dd = d + timedelta(days=off)
+            pool += by_md.get((dd.month, min(dd.day, 28) if dd.month == 2 else dd.day), [])
+        doy_clear.append(round(sum(1 for v in pool if v < CLEAR_LIMIT) / len(pool), 3) if pool else None)
+        doy_cloud.append(round(sum(pool) / len(pool), 1) if pool else None)
+    by_month = []
+    for m in range(1, 13):
+        pool = [v for (mm, _), vs in by_md.items() if mm == m for v in vs]
+        by_month.append(
+            {
+                "clear": round(sum(1 for v in pool if v < CLEAR_LIMIT) / len(pool), 3) if pool else None,
+                "cloud": round(sum(pool) / len(pool), 1) if pool else None,
+            }
+        )
+    return {
+        "site": site["id"],
+        "years": list(CLIMATE_YEARS),
+        "clear_limit": CLEAR_LIMIT,
+        "doy_clear": doy_clear,
+        "doy_cloud": doy_cloud,
+        "by_month": by_month,
+    }
+
+
 def main():
     sites, g = load_js_config()
     print(f"관측지 {len(sites)}곳")
@@ -408,7 +480,14 @@ def main():
     lats, lons = grid_axes(g)
     grid = fetch_grid(lats, lons, times)
 
+    climate = None
+    try:
+        climate = fetch_climate(next(x for x in sites if x["id"] == CLIMATE_SITE))
+    except Exception as e:  # noqa: BLE001
+        errors.append(scrub(f"climate: {e}"))
+
     payload = {
+        "climate": climate,
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "timezone": "Asia/Seoul",
         "times": times,
