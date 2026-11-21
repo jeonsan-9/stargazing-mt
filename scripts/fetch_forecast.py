@@ -38,6 +38,12 @@ OPEN_METEO_MODELS = [
     "meteofrance_seamless",
 ]
 GRID_MODELS = ["ecmwf_ifs025", "gfs_seamless", "icon_seamless", "jma_seamless"]
+# 하층/중층/상층 구름 격자는 이 모델들만 (파일 크기 때문)
+GRID_LAYER_MODELS = ["ecmwf_ifs025", "gfs_seamless"]
+SITE_VARS = (
+    "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
+    "relative_humidity_2m,wind_speed_10m,visibility,temperature_2m"
+)
 
 
 def load_js_config():
@@ -112,10 +118,11 @@ def fetch_open_meteo(sites):
             {
                 "latitude": ",".join(str(s["lat"]) for s in sites),
                 "longitude": ",".join(str(s["lon"]) for s in sites),
-                "hourly": "cloud_cover,relative_humidity_2m,wind_speed_10m",
+                "hourly": SITE_VARS,
                 "models": ",".join(OPEN_METEO_MODELS),
                 "forecast_days": 7,
                 "timezone": "Asia/Seoul",
+                "wind_speed_unit": "ms",
             },
         )
     )
@@ -130,8 +137,13 @@ def fetch_open_meteo(sites):
                 continue
             models[m] = {
                 "cloud": cloud,
+                "low": pick(h, "cloud_cover_low", m),
+                "mid": pick(h, "cloud_cover_mid", m),
+                "high": pick(h, "cloud_cover_high", m),
                 "rh": pick(h, "relative_humidity_2m", m),
                 "wind": pick(h, "wind_speed_10m", m),
+                "vis": pick(h, "visibility", m),
+                "temp": pick(h, "temperature_2m", m),
             }
         out[s["id"]] = {"elevation": r.get("elevation"), "models": models}
     return times, out
@@ -145,20 +157,59 @@ def fetch_grid(lats, lons, times):
             {
                 "latitude": ",".join(str(p[0]) for p in pts),
                 "longitude": ",".join(str(p[1]) for p in pts),
-                "hourly": "cloud_cover",
+                "hourly": "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high",
                 "models": ",".join(GRID_MODELS),
                 "forecast_days": 7,
                 "timezone": "Asia/Seoul",
             },
         )
     )
-    models = {}
-    for m in GRID_MODELS:
-        cols = [pick(r["hourly"], "cloud_cover", m) or [None] * len(times) for r in resp]
+    def field(var, m):
+        cols = [pick(r["hourly"], var, m) or [None] * len(times) for r in resp]
         per_time = [[c[t] if t < len(c) else None for c in cols] for t in range(len(times))]
-        if any(v is not None for row in per_time for v in row):
-            models[m] = per_time
-    return {"lats": lats, "lons": lons, "models": models}
+        return per_time if any(v is not None for row in per_time for v in row) else None
+
+    models = {}
+    layers = {}
+    for m in GRID_MODELS:
+        total = field("cloud_cover", m)
+        if total:
+            models[m] = total
+        if m in GRID_LAYER_MODELS:
+            lay = {k: field(f"cloud_cover_{k}", m) for k in ("low", "mid", "high")}
+            lay = {k: v for k, v in lay.items() if v}
+            if lay:
+                layers[m] = lay
+    return {"lats": lats, "lons": lons, "models": models, "layers": layers}
+
+
+# ---------------- 미세먼지 (Open-Meteo Air Quality, CAMS) ----------------
+def fetch_air(sites, times):
+    resp = as_list(
+        get_json(
+            "https://air-quality-api.open-meteo.com/v1/air-quality",
+            {
+                "latitude": ",".join(str(s["lat"]) for s in sites),
+                "longitude": ",".join(str(s["lon"]) for s in sites),
+                "hourly": "pm2_5,pm10",
+                "forecast_days": 5,
+                "timezone": "Asia/Seoul",
+            },
+        )
+    )
+    idx = index_of(times)
+    out = {}
+    for s, r in zip(sites, resp):
+        h = r["hourly"]
+        pm25 = [None] * len(times)
+        pm10 = [None] * len(times)
+        for k, t in enumerate(h["time"]):
+            i = idx.get(t)
+            if i is not None:
+                pm25[i] = h["pm2_5"][k]
+                pm10[i] = h["pm10"][k]
+        out[s["id"]] = {"pm25": pm25, "pm10": pm10}
+    return out
 
 
 # ---------------- 시간축 맞추기 ----------------
@@ -180,6 +231,9 @@ def fetch_metno(site, times):
     cloud = [None] * len(times)
     rh = [None] * len(times)
     wind = [None] * len(times)
+    low = [None] * len(times)
+    mid = [None] * len(times)
+    high = [None] * len(times)
     for ts in data["properties"]["timeseries"]:
         dt = datetime.fromisoformat(ts["time"].replace("Z", "+00:00"))
         i = idx.get(local_key(dt))
@@ -187,9 +241,12 @@ def fetch_metno(site, times):
             continue
         d = ts["data"]["instant"]["details"]
         cloud[i] = d.get("cloud_area_fraction")
+        low[i] = d.get("cloud_area_fraction_low")
+        mid[i] = d.get("cloud_area_fraction_medium")
+        high[i] = d.get("cloud_area_fraction_high")
         rh[i] = d.get("relative_humidity")
         wind[i] = d.get("wind_speed")
-    return {"cloud": cloud, "rh": rh, "wind": wind}
+    return {"cloud": cloud, "low": low, "mid": mid, "high": high, "rh": rh, "wind": wind}
 
 
 # ---------------- 7Timer ----------------
@@ -306,7 +363,7 @@ def fetch_kma(site, times):
         elif cat == "REH":
             rh[i] = float(val)
         elif cat == "WSD":
-            wind[i] = float(val) * 3.6  # m/s -> km/h (Open-Meteo와 단위 맞춤)
+            wind[i] = float(val)  # m/s
     # PTY가 SKY보다 먼저 나오면 덮어써지지 않도록 한 번 더 반영
     for it in items:
         if it["category"] == "PTY" and str(it["fcstValue"]) != "0":
@@ -340,6 +397,13 @@ def main():
             else:
                 out[s["id"]]["models"][name] = res
             time.sleep(0.3)
+
+    try:
+        air = fetch_air(sites, times)
+        for sid, a in air.items():
+            out[sid]["air"] = a
+    except Exception as e:  # noqa: BLE001
+        errors.append(scrub(f"air: {e}"))
 
     lats, lons = grid_axes(g)
     grid = fetch_grid(lats, lons, times)
