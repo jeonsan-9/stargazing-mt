@@ -255,3 +255,28 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   .night, .site, .pick { transition: transform .16s ease-out, background .16s, border-color .16s; }
   .night:hover, .site:hover, .pick:hover { transform: translateY(-2px); }
 }
+
+/* 학기: 미리 정하기 */
+.strip-cell.x { background: repeating-linear-gradient(135deg, rgba(255,255,255,.12) 0 3px, transparent 3px 6px) !important; cursor: default; }
+.odds { font-style: normal; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 4px; vertical-align: 1px; }
+.odds.hi { background: rgba(182,235,217,.18); color: #b6ebd9; }
+.odds.mid { background: rgba(255,230,168,.16); color: #ffe6a8; }
+.odds.lo { background: rgba(255,170,170,.14); color: #ffb3b3; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.chip { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.chip.soft { border-style: dashed; color: var(--faint); }
+.retro { padding: 9px 10px; border-radius: 14px; background: rgba(208,194,252,.05); margin-bottom: 6px; }
+.retro .rh { display: flex; justify-content: space-between; align-items: center; }
+.retro .rv { font-size: 12px; }
+.retro .rs { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); margin: 4px 0; }
+.retro .rs b { color: var(--text); }
+.retro small { color: var(--faint); font-size: 11px; }
+/* 관측 대상 */
+.targets { display: flex; flex-direction: column; gap: 6px; }
+.tg { display: grid; grid-template-columns: 30px 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 14px; background: rgba(208,194,252,.05); }
+.tg .ti { font-size: 20px; text-align: center; }
+.tg .tn { display: flex; flex-direction: column; min-width: 0; }
+.tg .tn small { color: var(--accent); font-size: 11px; }
+.tg .tn em { font-style: normal; color: var(--faint); font-size: 11px; margin-top: 2px; }
+.tg .tw { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; }
+.tg .tw small { color: var(--muted); font-size: 11px; }

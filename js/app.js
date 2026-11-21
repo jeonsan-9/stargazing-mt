@@ -3,6 +3,7 @@ import { SITES, DEPARTURE } from "./sites.js";
 import { MODELS, GRID_MODELS, modelLabel } from "./models.js";
 import { loadForecast } from "./data.js";
 import { renderMonth, renderSemester, renderYear, moonIcon } from "./longrange.js";
+import { targetsHTML } from "./targets.js";
 import { scoreNight, scoreColor, moonInfo, darkWindow, parseLocal, ymd, addDays, nightIndices } from "./score.js";
 
 const EXAG = 3; // 지형 과장 배율 (한반도 산은 낮아서 3배로 키워야 높낮이가 보임)
@@ -775,6 +776,8 @@ function renderDetail() {
     <div class="kv"><span>해발</span><b>${elev != null ? Math.round(elev) + " m" : "-"}</b></div>
     <div class="kv"><span>천문박명 (완전히 어두운 시간)</span><b>${fmtTime(dw.dusk)} ~ ${fmtTime(dw.dawn)}</b></div>
     <div class="kv"><span>달</span><b>${moon.phaseName} · ${Math.round(moon.fraction * 100)}% · 뜸 ${fmtTime(moon.rise)} / 짐 ${fmtTime(moon.set)}</b></div>
+    <h4>오늘 밤 볼거리</h4>
+    ${targetsHTML(state.night, r.site.lat, r.site.lon)}
     <h4>시간별 예보</h4>
     ${hourTable(r)}
     <h4>모델별 구름량 (가장 좋은 3시간 평균)</h4>
