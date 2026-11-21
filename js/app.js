@@ -44,7 +44,47 @@ map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-
 const overlay = new deck.MapboxOverlay({ interleaved: false, layers: [] });
 map.addControl(overlay);
 
+// ---------- 지도 스타일 다듬기 ----------
+// CARTO dark-matter 위에서 색을 절제하고 라벨은 주요 도시와 도 이름만 남김
+const KEEP_LABELS = new Set(["place_city_r6", "place_city_r5", "place_state"]);
+const HIDE = /^(tunnel|bridge_(service|minor|path|sec)|road_(service|minor|path|sec|pri)|rail|aeroway|building|boundary_county|water_shadow|landuse_residential|park_)/;
+
+function styleBasemap() {
+  for (const l of map.getStyle().layers) {
+    const id = l.id;
+    if (l.type === "symbol") {
+      if (!KEEP_LABELS.has(id)) {
+        map.setLayoutProperty(id, "visibility", "none");
+        continue;
+      }
+      map.setLayoutProperty(id, "text-field", ["coalesce", ["get", "name:ko"], ["get", "name"]]);
+      map.setLayoutProperty(id, "text-letter-spacing", 0.08);
+      map.setPaintProperty(id, "text-color", id === "place_state" ? "#5d6a90" : "#9fabcf");
+      map.setPaintProperty(id, "text-halo-color", "rgba(6,9,20,0.85)");
+      map.setPaintProperty(id, "text-halo-width", 1.4);
+      continue;
+    }
+    if (HIDE.test(id)) {
+      map.setLayoutProperty(id, "visibility", "none");
+      continue;
+    }
+    if (id === "background") map.setPaintProperty(id, "background-color", "#0b1124");
+    else if (id === "water") map.setPaintProperty(id, "fill-color", "#04060f");
+    else if (id === "waterway") map.setPaintProperty(id, "line-color", "#0a1022");
+    else if (id === "landcover" || id === "landuse" || id === "park_national_park") map.setPaintProperty(id, "fill-opacity", 0.0);
+    else if (id.startsWith("boundary_state")) {
+      map.setPaintProperty(id, "line-color", "#2c3a66");
+      map.setPaintProperty(id, "line-opacity", 0.7);
+    } else if (id.startsWith("boundary_country")) map.setPaintProperty(id, "line-color", "#3a4a80");
+    else if (/^(road|bridge)_(mot|trunk)/.test(id)) {
+      map.setPaintProperty(id, "line-color", id.includes("case") ? "rgba(0,0,0,0)" : "#26315a");
+      map.setPaintProperty(id, "line-opacity", 0.55);
+    }
+  }
+}
+
 map.on("load", () => {
+  styleBasemap();
   map.addSource("dem", {
     type: "raster-dem",
     tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
