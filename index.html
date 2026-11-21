@@ -3,13 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>별보러 MT · 계명대 AAA</title>
+  <title>AAA 징크스 타파기 · 계명대</title>
   <meta name="description" content="여러 기상 모델을 종합해 동아리 관측 MT 날짜와 장소를 고르는 3D 지도" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gaegu:wght@700&family=Jua&display=swap" />
   <link rel="stylesheet" href="css/style.css" />
+  <script>
+    // 디자인 테마: 주소 뒤 ?theme=이름 으로 바꿔 볼 수 있음
+    (function () {
+      var t = new URLSearchParams(location.search).get("theme") || "cute";
+      if (!/^[a-z]+$/.test(t)) t = "cute";
+      document.documentElement.dataset.theme = t;
+      document.write('<link rel="stylesheet" id="themeCss" href="css/theme-' + t + '.css" />');
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.38/dist.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
@@ -35,7 +42,7 @@
           </g>
           <circle cx="29" cy="28" r="2.5" fill="#ffe6a8"/>
         </svg>
-        <h1>별보러 MT</h1>
+        <h1>AAA 징크스 타파기</h1>
         <span class="club">계명대학교 AAA</span>
       </div>
       <p id="status">예보 불러오는 중…</p>
