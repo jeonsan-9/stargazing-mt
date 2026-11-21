@@ -28,8 +28,8 @@ const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const map = new maplibregl.Map({
   container: "map",
   style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-  center: [128.75, 35.95],
-  zoom: 8,
+  center: [128.9, 36.0],
+  zoom: 8.6,
   pitch: 62,
   bearing: -20,
   maxPitch: 75,
@@ -63,10 +63,11 @@ map.on("load", () => {
       type: "hillshade",
       source: "dem-hs",
       paint: {
-        "hillshade-exaggeration": 0.85,
+        "hillshade-exaggeration": 1,
         "hillshade-shadow-color": "#000000",
-        "hillshade-highlight-color": "#6f86b8",
+        "hillshade-highlight-color": "#b8c8f0",
         "hillshade-accent-color": "#1b2440",
+        "hillshade-illumination-direction": 315,
       },
     },
     firstSymbol
