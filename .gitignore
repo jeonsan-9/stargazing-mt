@@ -1,0 +1,13 @@
+# 비밀 키
+.env
+.env.*
+*.key
+.baze_key*
+
+# 생성 데이터 (GitHub Actions가 배포 때마다 새로 만듦)
+data/forecast.json
+
+__pycache__/
+.DS_Store
+node_modules/
+_site/
