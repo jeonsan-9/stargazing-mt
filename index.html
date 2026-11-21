@@ -7,8 +7,8 @@
   <meta name="description" content="여러 기상 모델을 종합해 동아리 관측 MT 날짜와 장소를 고르는 3D 지도" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
-  <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/diorama-map.css" />
+  <link rel="stylesheet" href="css/style.css?v=20261122d" />
+  <link rel="stylesheet" href="css/diorama-map.css?v=20261122d" />
   <script>
     // 디자인 테마: 주소 뒤 ?theme=이름 으로 바꿔 볼 수 있음
     (function () {
@@ -59,10 +59,11 @@
         <span class="club">계명대학교 AAA</span>
       </div>
       <p id="status">예보 불러오는 중…</p>
-      <a class="diorama-link" id="map-link" href="?map=terrain">기존 지도</a>
-      <a class="diorama-link" href="./diorama.html">디오라마 전체 화면</a>
-      <button id="tonight-main" class="diorama-link" type="button" aria-controls="detailPanel">보현산 밤하늘</button>
-      <a class="diorama-link" id="observe-link" href="./observe.html">관측 도구</a>
+      <nav class="map-actions" aria-label="지도와 관측 계획">
+        <a class="diorama-link" id="wide-map-link" href="./diorama.html">지도 크게 보기</a>
+        <a class="diorama-link" id="observe-link" href="./observe.html">관측 계획</a>
+        <a id="map-link" href="?map=terrain">일반 지도</a>
+      </nav>
     </header>
 
     <nav id="tabs" role="tablist">
@@ -109,6 +110,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=20261122e"></script>
 </body>
 </html>

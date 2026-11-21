@@ -1,5 +1,6 @@
 /* global maplibregl, deck, SunCalc */
 import { SITES, DEPARTURE } from "./sites.js";
+import { renderSiteInfo } from "./site-info.js";
 import { MODELS, GRID_MODELS, modelLabel } from "./models.js";
 import { loadForecast } from "./data.js";
 import { renderMonth, renderSemester, renderYear, moonIcon } from "./longrange.js";
@@ -80,27 +81,26 @@ const overlay = map ? new deck.MapboxOverlay({ interleaved: false, layers: [] })
 if (map) map.addControl(overlay);
 let diorama, dioramaHour, dioramaCloud;
 let detailSky;
-const mapSites = new Set(["bohyeon_obs", "bohyeon_sci", "uiseong", "gajisan"]);
 
 async function loadDiorama() {
   if (map) {
     $("map-link").href = "./index.html";
-    $("map-link").textContent = "기본 디오라마";
+    $("map-link").textContent = "3D 지도";
     return;
   }
   $("toggle3d").textContent = "시점 초기화";
   $("map-status").textContent = "3D 지도 불러오는 중…";
   try {
-    const { Diorama } = await import("./diorama/scene.js");
+    const { Diorama } = await import("./diorama/scene.js?v=20261122e");
     const pins = $("pins");
-    diorama = await new Diorama($("scene"), pins, $("moon")).load("models/korea.glb");
+    diorama = await new Diorama($("scene"), pins, $("moon")).load("models/korea.glb?v=20261122d");
     diorama.calibrateWith([...SITES, DEPARTURE]);
     pins.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-site]");
       if (button && state.data) selectSite(button.dataset.site, false);
     });
     diorama.setTime(new Date());
-    diorama.setSites(SITES.filter((site) => mapSites.has(site.id)));
+    diorama.setSites(SITES);
     diorama.start();
     $("map-status").textContent = diorama.placeholder ? "임시 지형 표시 중" : "";
     renderLayers();
@@ -513,7 +513,7 @@ function renderLayers() {
       dioramaCloud = key;
     }
     diorama.setCloudVisibility(state.showCloud);
-    diorama.setSites(visible.filter(({ site }) => mapSites.has(site.id) || site.id === state.selected).map(({ site, hours }) =>
+    diorama.setSites(visible.map(({ site, hours }) =>
       ({ ...site, score: hours.find((hour) => hour.i === i)?.score ?? null })));
     return;
   }
@@ -746,6 +746,7 @@ function renderHourSlider() {
     renderLayers();
     if (detailSky && document.body.classList.contains("detail-open")) {
       drawNightSky($("detail-night-chart"), detailSky, currentTime());
+      updateSiteSkyLink();
     }
   };
   slider.oninput();
@@ -757,6 +758,7 @@ function currentTime() {
 
 function updateHourLabel() {
   const t = currentTime();
+  $("wide-map-link").href = `./diorama.html?${new URLSearchParams({ t: t.toISOString() })}`;
   const has = !!cloudField();
   const md = t.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" });
   $("hourLabel").textContent = `${md} ${fmtTime(t)}${has ? "" : " (자료 없음)"}`;
@@ -919,6 +921,9 @@ function renderDetail() {
   const [cr, cg, cb] = scoreColor(r.score);
   box.innerHTML = `
     <h3>${r.site.name} <span class="score" style="background:rgba(${cr},${cg},${cb},.92)">${r.score ?? "-"}</span></h3>
+    <a id="site-sky-link" class="diorama-link" href="./sky.html">이곳에서 하늘 보기</a>
+    ${!map ? '<button id="site-model" class="diorama-link" type="button">소품 가까이 보기</button>' : ''}
+    <details><summary>관측지 안내와 방문 후기</summary><div id="main-site-info" class="hint"></div></details>
     <p class="lead">${
       r.score == null
         ? "이 밤의 예보 자료가 없습니다."
@@ -938,6 +943,17 @@ function renderDetail() {
     ${bars || '<p class="hint">자료 없음</p>'}
     <p class="hint">모델 일치도 ${r.agreement ?? "-"} (모델 간 평균 차이 ${r.spread != null ? Math.round(r.spread) : "-"}%p)</p>`;
   drawNightSky($("detail-night-chart"), detailSky, currentTime());
+  renderSiteInfo($("main-site-info"), r.site.id);
+  $("site-model")?.addEventListener("click", () => diorama?.focusSite(r.site));
+  updateSiteSkyLink();
+}
+
+function updateSiteSkyLink() {
+  const link = $("site-sky-link");
+  if (!link || !state.night || !state.selected) return;
+  const query = new URLSearchParams({ site: state.selected, day: state.night, t: currentTime().toISOString() });
+  if (map) query.set("from", "terrain");
+  link.href = `./sky.html?${query}`;
 }
 
 function avg(a) {
@@ -1008,7 +1024,6 @@ $("play").onclick = () => {
   }, 40);
 };
 $("closeDetail").onclick = () => document.body.classList.remove("detail-open");
-$("tonight-main").onclick = () => { if (state.data) selectSite("bohyeon_obs", false); };
 
 // ---------- 주 / 월 / 학기 / 1년 ----------
 const MT_SITE = SITES.find((s) => s.id === "bohyeon_obs");
@@ -1069,11 +1084,14 @@ loadDiorama();
   $("status").textContent = `예보 ${srcCount}개 소스 · ${gen.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 기준${state.data.source === "live" ? " (실시간 Open-Meteo)" : ""}`;
   renderModelSelect();
   state.month = todayYmd().slice(0, 7);
-  setNight(nightsAvailable()[0]);
-  if (map) selectSite("bohyeon_obs", false); // 동아리 MT는 항상 영천
+  const params = new URLSearchParams(location.search);
+  const day = params.get("day"), site = params.get("site");
+  setNight(nightsAvailable().includes(day) ? day : nightsAvailable()[0]);
+  if (SITES.some(({ id }) => id === site)) selectSite(site, false);
+  else if (map) selectSite("bohyeon_obs", false); // 동아리 MT는 항상 영천
   else { state.selected = "bohyeon_obs"; renderList(); }
   // 휴대폰에선 상세 패널이 메인 화면을 가리므로 처음엔 닫아 둠
-  if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.remove("detail-open");
+  if (!site && window.matchMedia("(max-width: 760px)").matches) document.body.classList.remove("detail-open");
   window.__app = state; // 디버깅용
   window.__map = map;
 })();

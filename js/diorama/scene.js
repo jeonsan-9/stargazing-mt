@@ -90,6 +90,7 @@ export class Diorama {
 
     this.#frame();
     this.#makeStars();
+    this.#makeMoon();
     this.#makeClouds();
     return this;
   }
@@ -100,6 +101,7 @@ export class Diorama {
       .map((s) => ({ km: lonLatToKm(s.lon, s.lat), model: { x: this.anchors[s.id].x, z: this.anchors[s.id].z } }));
     const ok = calibrate(pairs);
     if (!ok && !this.placeholder) fitBox(this.box);
+    this.moonOrigin = this.ground(LON0, LAT0);
     console.info(ok ? `관측지 ${pairs.length}곳으로 좌표 보정` : "관측지 이름 없음, 섬 크기로 대략 맞춤");
   }
 
@@ -212,18 +214,31 @@ export class Diorama {
     };
   }
 
+  #makeMoon() {
+    this.moonTexture = new THREE.CanvasTexture(this.moon.querySelector("canvas"));
+    this.moonTexture.colorSpace = THREE.SRGBColorSpace;
+    this.moonDisc = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.moonTexture, transparent: true,
+      depthWrite: false, toneMapped: false }));
+    this.moonDisc.scale.setScalar(this.radius * 0.122);
+    this.moonDisc.visible = false;
+    this.moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture("rgba(255,223,166,0.21)"),
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    this.moonGlow.scale.setScalar(this.radius * 0.30);
+    this.moonGlow.visible = false;
+    this.moonGlow.renderOrder = 3;
+    this.moonDisc.renderOrder = 4;
+    this.moonBeam = new THREE.SpotLight("#becbff", 0, this.radius * 0.9, Math.PI / 3, 0.78, 2);
+    this.scene.add(this.moonGlow, this.moonDisc, this.moonBeam, this.moonBeam.target);
+  }
+
   #showMoon(position, illumination) {
-    this.moon.hidden = false;
     const altitude = THREE.MathUtils.radToDeg(position.altitude);
     const bearing = (THREE.MathUtils.radToDeg(position.azimuth) + 540) % 360;
     const directions = ["북", "북동", "동", "남동", "남", "남서", "서", "북서"];
-    this.moon.style.left = `${50 + 30 * Math.sin(position.azimuth)}%`;
-    this.moon.style.top = `${26 - 17 * THREE.MathUtils.clamp(altitude / 72, 0, 1)}%`;
-    this.moon.toggleAttribute("data-below-horizon", altitude < 0);
     const direction = directions[Math.round(bearing / 45) % 8];
     const light = moonLighting(position, illumination);
     const phase = `${light.name} ${Math.round(illumination.fraction * 100)}%`;
-    this.moon.querySelector("span").textContent = altitude < 0
+    this.moonCaption = altitude < 0
       ? `${phase} · 지평선 아래`
       : `${phase} · ${direction} ${Math.round(bearing) % 360}° · 고도 ${Math.round(altitude)}°`;
     const canvas = this.moon.querySelector("canvas");
@@ -254,10 +269,12 @@ export class Diorama {
         (75 + 180 * lit) * THREE.MathUtils.clamp((1 - r2) * n / 4, 0, 1)], i);
     }
     ctx.putImageData(pixels, 0, 0);
+    this.moonTexture.needsUpdate = true;
   }
 
   // ---------- 시각 ----------
   setTime(date) {
+    this.time = date;
     const sun = SunCalc.getPosition(date, LAT0, LON0);
     const mp = SunCalc.getMoonPosition(date, LAT0, LON0);
     const moon = SunCalc.getMoonIllumination(date);
@@ -281,15 +298,29 @@ export class Diorama {
     // 달: SunCalc 방위각은 남쪽 기준 시계방향
     const dir = (az, alt) =>
       new THREE.Vector3(-Math.sin(az) * Math.cos(alt), Math.sin(alt), Math.cos(az) * Math.cos(alt));
+    const origin = this.moonOrigin ?? this.center;
+    const moonDirection = dir(mp.azimuth, mp.altitude);
     this.#showMoon(mp, moon);
+    this.moonDisc.position.copy(origin).addScaledVector(moonDirection, this.radius * 0.31);
+    this.moonDisc.visible = mp.altitude > 0;
+    this.moonGlow.position.copy(this.moonDisc.position);
+    this.moonBeam.position.copy(this.moonDisc.position);
+    this.moonBeam.target.position.copy(origin);
+    this.moonGlow.visible = this.moonDisc.visible && t < 0.55;
+    this.moonGlow.material.opacity = il * (1 - t);
+    const aboveHorizon = THREE.MathUtils.smoothstep(mp.altitude, 0, 0.21);
+    this.moonBeam.intensity = (this.radius * 0.31) ** 2 * 0.92 * il * aboveHorizon * (1 - t) ** 2;
 
     // 주 조명: 낮이면 해, 밤이면 달 (달 밝기에 비례)
     const night = t < 0.35;
-    const src = night ? dir(mp.azimuth, Math.max(mp.altitude * 0.63, 0.075)) : dir(sun.azimuth, Math.max(sun.altitude, 0.08));
-    this.key.position.copy(this.center).addScaledVector(src, this.radius * 2.5);
-    this.key.target.position.copy(this.center);
+    // 실제 달의 방위는 유지하고 그림자가 읽히도록 광원의 고도만 낮춘다.
+    const shadowAltitude = Math.atan(Math.tan(mp.altitude) * 0.64);
+    const src = night && mp.altitude > 0 ? dir(mp.azimuth, Math.max(shadowAltitude, 0.017)) : dir(sun.azimuth, Math.max(sun.altitude, 0.08));
+    const shadowCenter = this.shadowFocus ?? origin;
+    this.key.position.copy(shadowCenter).addScaledVector(src, this.radius * 2.5);
+    this.key.target.position.copy(shadowCenter);
     this.key.color.set(night ? "#c9d4ff" : dusk > 0.4 ? "#ffc89a" : "#fff1dc");
-    this.key.intensity = night ? (mp.altitude > 0 ? 0.36 + 1.7 * il : 0.12) : 1.2 + 0.6 * t;
+    this.key.intensity = night ? (mp.altitude > 0 ? 0.25 + 1.25 * il : 0) : 1.2 + 0.6 * t;
     this.key.castShadow = !night || mp.altitude > 0;
     this.hemi.color.lerpColors(new THREE.Color("#7c7fd0"), new THREE.Color("#e8ecff"), t);
     this.hemi.groundColor.lerpColors(new THREE.Color("#55486b"), new THREE.Color("#8b765f"), t);
@@ -365,8 +396,25 @@ export class Diorama {
     this.controls.enableDamping = false;
     this.controls.update();
     this.#frame();
+    this.shadowFocus = undefined;
+    if (this.time) this.setTime(this.time);
     this.controls.update();
     this.controls.enableDamping = damping;
+  }
+
+  focusSite(site) {
+    const point = this.anchors[site.id]?.clone() ?? this.ground(site.lon, site.lat);
+    const view = this.camera.position.clone().sub(this.controls.target).normalize();
+    this.controls.minDistance = this.radius * 0.016;
+    this.controls.target.copy(point).y += 1.0;
+    this.camera.position.copy(this.controls.target).addScaledVector(view, this.radius * 0.039);
+    this.controls.update();
+    this.shadowFocus = point;
+    const shadow = this.key.shadow.camera;
+    const span = this.radius * 0.13;
+    Object.assign(shadow, { left: -span, right: span, top: span, bottom: -span });
+    shadow.updateProjectionMatrix();
+    if (this.time) this.setTime(this.time);
   }
 
   // ---------- 관측지 ----------
@@ -389,6 +437,9 @@ export class Diorama {
       glow.position.copy(p).add(new THREE.Vector3(0, 2.4, 0));
       this.scene.add(glow);
       const el = document.createElement("button");
+      const stem = document.createElement("span");
+      stem.className = "pin-stem";
+      stem.setAttribute("aria-hidden", "true");
       el.type = "button";
       el.dataset.site = s.id;
       el.setAttribute("aria-controls", this.overlay.dataset.controls || "site-detail");
@@ -399,13 +450,14 @@ export class Diorama {
       const name = document.createElement("span");
       name.textContent = s.name;
       el.append(badge, name);
-      this.overlay.append(el);
-      return { s, p, glow, el, badge };
+      this.overlay.append(stem, el);
+      return { s, p, glow, el, badge, stem };
     });
     for (const marker of previous.values()) {
       this.scene.remove(marker.glow);
       marker.glow.material.map.dispose();
       marker.glow.material.dispose();
+      marker.stem.remove();
       marker.el.remove();
     }
   }
@@ -421,6 +473,8 @@ export class Diorama {
 
   start() {
     const v = new THREE.Vector3();
+    const localMoon = new THREE.Vector3();
+    const caption = this.moon.querySelector("span");
     const loop = (now = 0) => {
       this.controls.update();
       this.waterTime.value = now * 0.00065;
@@ -428,17 +482,38 @@ export class Diorama {
       const w = this.canvas.clientWidth;
       const h = this.canvas.clientHeight;
       const placed = [];
+      if (this.moonCaption) {
+        v.copy(this.moonDisc.position).project(this.camera);
+        const inView = this.moonDisc.visible && v.z > -1 && v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+        const text = `${this.moonCaption}${this.moonDisc.visible && !inView ? " · 시야 밖" : ""}`;
+        if (caption.textContent !== text) caption.textContent = text;
+        this.moon.hidden = false;
+        this.moon.toggleAttribute("data-status", !inView);
+        if (inView) {
+          localMoon.copy(this.moonDisc.position).applyMatrix4(this.camera.matrixWorldInverse);
+          const radiusPx = this.moonDisc.scale.x * h * 0.23 / (-localMoon.z * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
+          const x = (v.x + 1) * w / 2, y = (1 - v.y) * h / 2;
+          this.moon.style.left = `${THREE.MathUtils.clamp(x, 75, Math.max(75, w - 75))}px`;
+          this.moon.style.top = `${THREE.MathUtils.clamp(y + radiusPx + 8, 12, Math.max(12, h - 24))}px`;
+          placed.push({ x: x - radiusPx, y: y - radiusPx, w: 2 * radiusPx, h: 2 * radiusPx });
+          placed.push({ x: this.moon.offsetLeft - caption.offsetWidth / 2, y: this.moon.offsetTop, w: caption.offsetWidth, h: caption.offsetHeight });
+        }
+      }
       for (const m of this.markers) {
         v.copy(m.p).project(this.camera);
         const visible = v.z > -1 && v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
         m.el.hidden = !visible;
+        m.stem.hidden = !visible;
         if (!visible) continue;
         const x = (v.x + 1) * w / 2;
         const y = (1 - v.y) * h / 2;
         const pw = m.el.offsetWidth;
         const ph = m.el.offsetHeight;
-        const choices = [[x + 9, y - ph - 7], [x - pw - 9, y - ph - 7],
-                         [x + 9, y + 8], [x - pw - 9, y + 8], [x - pw / 2, y - 2 * ph - 14]];
+        const choices = [[x + 9, y - ph - 7], [x - pw - 9, y - ph - 7], [x + 9, y + 8], [x - pw - 9, y + 8]];
+        for (const row of [-2, 1, -3, 2, -4, 3]) {
+          const top = y + row * (ph + 7);
+          choices.push([x - pw / 2, top], [x + 22, top], [x - pw - 22, top]);
+        }
         const boxes = choices.map(([left, top]) => ({
           x: THREE.MathUtils.clamp(left, 8, Math.max(8, w - pw - 8)),
           y: THREE.MathUtils.clamp(top, 8, Math.max(8, h - ph - 8)), w: pw, h: ph,
@@ -447,6 +522,10 @@ export class Diorama {
           a.y + a.h + 5 <= b.y || b.y + b.h + 5 <= a.y)) ?? boxes[0];
         placed.push(box);
         m.el.style.transform = `translate(${box.x}px, ${box.y}px)`;
+        const dx = THREE.MathUtils.clamp(x, box.x + 7, box.x + pw - 7) - x;
+        const dy = THREE.MathUtils.clamp(y, box.y + 5, box.y + ph - 5) - y;
+        m.stem.style.width = `${Math.hypot(dx, dy)}px`;
+        m.stem.style.transform = `translate(${x}px, ${y}px) rotate(${Math.atan2(dy, dx)}rad)`;
       }
       requestAnimationFrame(loop);
     };

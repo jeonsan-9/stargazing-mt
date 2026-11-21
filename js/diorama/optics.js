@@ -15,16 +15,20 @@ export function cameraFrame(sensorWidth, sensorHeight, focalLength, angle, targe
     width: 2 * Math.atan(halfWidth) / DEG, height: 2 * Math.atan(halfHeight) / DEG };
 }
 
-export function drawCameraFrame(canvas, frame) {
+export function drawCameraFrame(canvas, frame, comparison) {
   const ctx = canvas.getContext("2d");
   const { width, height } = canvas;
   ctx.fillStyle = "#211f38";
   ctx.fillRect(0, 0, width, height);
-  if (!frame) return;
-  const { halfWidth, halfHeight, rotation, target } = frame;
-  const cx = Math.abs(Math.cos(rotation)), sx = Math.abs(Math.sin(rotation));
-  const boundX = Math.max(halfWidth * cx + halfHeight * sx, target?.[0] ?? 0);
-  const boundY = Math.max(halfWidth * sx + halfHeight * cx, target?.[1] ?? 0);
+  const frames = [[frame, "#ffd99e"], [comparison, "#c9a3f1"]].filter(([value]) => value);
+  if (!frames.length) return;
+  const target = (frame ?? comparison).target;
+  let boundX = target?.[0] ?? 0, boundY = target?.[1] ?? 0;
+  for (const [{ halfWidth, halfHeight, rotation }] of frames) {
+    const cx = Math.abs(Math.cos(rotation)), sx = Math.abs(Math.sin(rotation));
+    boundX = Math.max(boundX, halfWidth * cx + halfHeight * sx);
+    boundY = Math.max(boundY, halfWidth * sx + halfHeight * cx);
+  }
   const scale = Math.min((width - 78) / (2 * boundX), (height - 58) / (2 * boundY));
   ctx.save();
   ctx.translate(width / 2, height / 2);
@@ -42,9 +46,14 @@ export function drawCameraFrame(canvas, frame) {
     ctx.ellipse(0, 0, target[0] * scale, target[1] * scale, 0, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
   }
-  ctx.rotate(rotation);
-  ctx.strokeStyle = "#ffd99e";
   ctx.lineWidth = 3;
-  ctx.strokeRect(-halfWidth * scale, -halfHeight * scale, 2 * halfWidth * scale, 2 * halfHeight * scale);
+  for (const [{ halfWidth, halfHeight, rotation }, color] of frames) {
+    ctx.save();
+    ctx.rotate(rotation);
+    ctx.strokeStyle = color;
+    if (color === "#c9a3f1") ctx.setLineDash([7, 4]);
+    ctx.strokeRect(-halfWidth * scale, -halfHeight * scale, 2 * halfWidth * scale, 2 * halfHeight * scale);
+    ctx.restore();
+  }
   ctx.restore();
 }

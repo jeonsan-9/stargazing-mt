@@ -1,0 +1,35 @@
+:root { color-scheme: dark; color: #fff4df; background: #161a3b; font-family: "Gowun Dodum", system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100dvh; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+#view:active { cursor: grabbing; }
+#view:focus-visible { outline: 2px solid #f0cc99; outline-offset: -4px; }
+header, .controls, #sky-help { position: fixed; }
+header { left: clamp(12px, 3vw, 42px); top: clamp(12px, 3vw, 33px); }
+nav { display: flex; flex-wrap: wrap; gap: 13px; font-size: .85rem; }
+a { color: #ffe4b9; text-underline-offset: 3px; }
+h1 { margin: 13px 0 2px; font: clamp(27px, 4vw, 46px) "Jua", sans-serif; text-shadow: 0 3px 16px #050717aa; }
+p { margin: 0; font-size: .84rem; }
+#site-elevation { color: #e4d3ee; }
+.location { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-size: .8rem; }
+#sky-help { top: 20px; right: 22px; padding: 5px 9px; background: #171629c9; border-radius: 10px; color: #e7d7ef; }
+.controls { left: 50%; bottom: max(13px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(595px, calc(100% - 24px));
+  padding: 12px 14px; border: 1px solid #9f8aab75; border-radius: 17px; background: #211f37ee; box-shadow: 0 12px 36px #090b21a6; }
+.directions, .time { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.time { margin: 9px 0 6px; align-items: end; }
+button, select, input[type="date"] { font: inherit; min-height: 34px; padding: 4px 9px; border: 1px solid #9f8aab80; border-radius: 8px;
+  color: #fff4df; background: #373152; }
+button { min-width: 36px; cursor: pointer; }
+button:hover, button:focus-visible { background: #544267; }
+#look-moon { color: #ffe5b7; }
+#bearing { margin-left: auto; color: #ded0eb; font-size: .82rem; }
+.scrub { flex: 1; min-width: 145px; }
+.time label { font-size: .82rem; }
+.time input { display: block; width: 100%; margin-top: 4px; }
+.time input[type="range"] { height: 24px; accent-color: #e8be8f; }
+output { float: right; color: #ffdfa9; }
+#status { color: #efe1f5; }
+details { margin-top: 6px; color: #d9cbe4; font-size: .75rem; }
+details p { margin-top: 5px; font-size: .75rem; }
+summary { cursor: pointer; width: max-content; }
+@media (max-width: 540px) { #sky-help { top: auto; bottom: 183px; right: 12px; max-width: calc(100% - 24px); } }

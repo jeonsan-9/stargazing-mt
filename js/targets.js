@@ -126,7 +126,7 @@ const SHOWERS = [
 const ICON = { 행성: "🪐", 성단: "✨", 구상성단: "🔆", 성운: "🌫️", 행성상성운: "💫", 은하: "🌀", 이중성: "⭐", 은하수: "🌌", 유성우: "☄️", 달: "🌙" };
 
 // ---------- 좌표 변환 ----------
-function altAz(raH, decD, date, lat, lon) {
+export function altAz(raH, decD, date, lat, lon) {
   const d = julian(date) - 2451545;
   const lst = (((280.46061837 + 360.98564736629 * d + lon) % 360) + 360) % 360;
   const H = (lst - raH * 15) * RAD;

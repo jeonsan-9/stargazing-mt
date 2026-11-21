@@ -246,7 +246,10 @@ table.hourly { border-collapse: separate; border-spacing: 2px; font-size: 11px; 
 }
 
 .diorama-link:hover { text-decoration: underline; }
-button.diorama-link { background: transparent; cursor: pointer; }
+.map-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.map-actions #map-link { padding: .4rem; color: inherit; opacity: .8; font-size: .78rem; }
+#site-sky-link { margin: 0 0 8px; background: #55416c; border-color: #55416c; color: #fff4df; }
+#site-model { margin: 0 0 8px; background: transparent; cursor: pointer; }
 #detail canvas { width: 100%; height: auto; display: block; border-radius: 10px; margin-top: 8px; }
 
 #diorama-stage { display: none; }

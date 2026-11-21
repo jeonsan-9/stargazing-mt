@@ -6,7 +6,7 @@
   <title>AAA 징크스 타파기 · 디오라마</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/diorama-map.css" />
+  <link rel="stylesheet" href="css/diorama-map.css?v=20261122d" />
   <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
   <script type="importmap">
     { "imports": {
@@ -28,7 +28,7 @@
     #time label { display: flex; justify-content: space-between; font-size: 14px; margin: 7px 0 4px; }
     #time input { width: 100%; accent-color: var(--honey); }
     .toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
-    .toolbar :is(button, select), #close-site { border: 1px solid #d6c6b7; background: #fffbf3; color: var(--ink);
+    .toolbar :is(button, select), #close-site, #site-model { border: 1px solid #d6c6b7; background: #fffbf3; color: var(--ink);
       border-radius: 8px; min-height: 32px; padding: 3px 8px; font: inherit; font-size: 13px; }
     .toolbar button[aria-pressed="true"] { background: #e2eddb; border-color: #97a884; }
     #note { font-size: 12px; margin-top: 4px; color: #6b5871; }
@@ -37,8 +37,10 @@
       max-height: calc(100% - 140px); overflow: auto; background: var(--paper); border-radius: 16px;
       padding: 11px 14px; box-shadow: 0 8px 30px #1711324d; }
     #site-detail h2 { font: 17px "Jua", sans-serif; margin: 0; }
+    #site-sky { display: inline-block; margin: 3px 0 8px; padding: 6px 9px; border-radius: 8px; background: #5d4672; color: #fff3df; font-size: 13px; }
     #site-detail .title { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
     #site-detail p { margin: 6px 0; font-size: 12px; color: #6b5871; }
+    #site-detail summary { cursor: pointer; font-size: 13px; }
     #site-detail table { border-collapse: collapse; text-align: left; width: 100%; font-size: 13px; }
     #site-detail :is(th, td) { padding: 5px 4px; }
     #site-detail tr + tr, #site-detail tbody { border-top: 1px solid #e5d5c7; }
@@ -53,10 +55,13 @@
   <canvas id="scene"></canvas>
   <div id="moon" hidden><canvas width="144" height="144" role="img" aria-label="달의 위상"></canvas><span></span></div>
   <div id="pins"></div>
-  <header><h1>AAA 징크스 타파기</h1><small>계명대학교 천체관측 동아리</small><br><a href="./index.html">전체 예보</a> · <a id="observe-link" href="./observe.html">관측 도구</a></header>
+  <header><h1>AAA 징크스 타파기</h1><small>계명대학교 천체관측 동아리</small><br><a href="./index.html">← 예보 지도</a> · <a id="observe-link" href="./observe.html">관측 계획</a></header>
   <aside id="site-detail" aria-labelledby="site-title" hidden>
     <div class="title"><h2 id="site-title" tabindex="-1"></h2><button id="close-site" type="button">닫기</button></div>
     <p id="site-summary"></p>
+    <a id="site-sky" href="./sky.html">이곳에서 하늘 보기</a>
+    <button id="site-model" type="button">소품 가까이 보기</button>
+    <details><summary>관측지 안내와 방문 후기</summary><div id="site-notes"></div></details>
     <table id="site-hours" hidden><thead><tr><th>시간</th><th>점수</th><th>강수</th><th>구름</th></tr></thead><tbody></tbody></table>
     <section id="night-sky" aria-labelledby="night-title">
       <strong id="night-title">밤하늘</strong>
@@ -73,24 +78,23 @@
       <select id="forecastDay" aria-label="예보 날짜" disabled></select>
       <button id="cloud-view" type="button" aria-pressed="true">예보 구름</button>
       <button id="reset-view" type="button">시점 초기화</button>
-      <button id="tonight" type="button" aria-controls="site-detail">밤하늘</button>
     </div>
     <label for="slider"><span id="when">-</span><span id="moonTxt"></span></label>
     <input id="slider" type="range" min="0" max="0" value="0" aria-label="예보 시간" disabled />
     <div id="note" role="status">예보 불러오는 중…</div>
   </div>
   <script type="module">
-    import { Diorama } from "./js/diorama/scene.js";
+    import { Diorama } from "./js/diorama/scene.js?v=20261122e";
     import { loadForecast } from "./js/data.js";
     import { SITES, DEPARTURE } from "./js/sites.js";
+    import { renderSiteInfo } from "./js/site-info.js";
     import { GRID_MODELS } from "./js/models.js";
     import { addDays, parseLocal, scoreHour, scoreNight, ymd } from "./js/score.js";
     import { recommendTargets } from "./js/targets.js";
     import { drawNightSky, nightSky } from "./js/diorama/night.js";
 
     const q = new URLSearchParams(location.search);
-    const model = q.get("model") || "models/korea.glb";
-    const shown = ["bohyeon_obs", "bohyeon_sci", "uiseong", "gajisan"].map((id) => SITES.find((site) => site.id === id));
+    const model = q.get("model") || "models/korea.glb?v=20261122d";
     const d = await new Diorama(document.getElementById("scene"), document.getElementById("pins"), document.getElementById("moon")).load(model);
     d.calibrateWith([...SITES, DEPARTURE]);
     const slider = document.getElementById("slider");
@@ -117,6 +121,8 @@
       const observeParams = new URLSearchParams({site: selection?.id ?? "bohyeon_obs", day});
       document.getElementById("observe-link").href = `./observe.html?${observeParams}`;
       if (!selection) return;
+      const skyParams = new URLSearchParams({ site: selection.id, day, t: time.toISOString(), from: "wide" });
+      document.getElementById("site-sky").href = `./sky.html?${skyParams}`;
       document.getElementById("site-title").textContent = selection.name;
       const hour = weather(selection, index);
       document.getElementById("site-summary").textContent = hour?.n
@@ -141,6 +147,7 @@
 
       const key = `${selection.id}:${day}:${Boolean(data)}`;
       if (activeNight?.key !== key) {
+        renderSiteInfo(document.getElementById("site-notes"), selection.id);
         const sky = nightSky(day, selection);
         activeNight = { key, sky };
         const windows = sky.moonless.map(([from, to]) => `${clockLabel.format(from)}–${clockLabel.format(to)}`);
@@ -165,7 +172,7 @@
       const t = times[index] ? parseLocal(times[index]) : fallback;
       d.setTime(t);
       if (cloudModel) d.setClouds(data.grid.models[cloudModel][index], data.grid.lats, data.grid.lons);
-      d.setSites(shown.map((site) => ({ ...site, score: weather(site, index)?.score ?? null })));
+      d.setSites(SITES.map((site) => ({ ...site, score: weather(site, index)?.score ?? null })));
       slider.setAttribute("aria-valuetext", timeLabel.format(t));
       document.getElementById("when").textContent = timeLabel.format(t);
       document.getElementById("moonTxt").textContent = `달 ${Math.round(SunCalc.getMoonIllumination(t).fraction * 100)}%`;
@@ -186,6 +193,7 @@
       d.setCloudVisibility(showClouds);
     });
     document.getElementById("reset-view").addEventListener("click", () => d.resetView());
+    document.getElementById("site-model").addEventListener("click", () => { if (selection) d.focusSite(selection); });
     datePicker.addEventListener("change", () => selectDay(datePicker.value));
     slider.addEventListener("input", () => show(+slider.value));
     function openSite(site, button) {
@@ -197,9 +205,8 @@
     }
     document.getElementById("pins").addEventListener("click", (event) => {
       const pin = event.target.closest("button[data-site]");
-      if (pin) openSite(shown.find((site) => site.id === pin.dataset.site), pin);
+      if (pin) openSite(SITES.find((site) => site.id === pin.dataset.site), pin);
     });
-    document.getElementById("tonight").addEventListener("click", (event) => openSite(shown[0], event.currentTarget));
     function closeSite() {
       if (!selection) return;
       opener?.focus();
@@ -211,6 +218,8 @@
     panel.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSite(); });
 
     show(0);
+    const requestedSite = SITES.find(({ id }) => id === q.get("site"));
+    if (requestedSite) openSite(requestedSite);
     d.start();
     window.diorama = d;
 
