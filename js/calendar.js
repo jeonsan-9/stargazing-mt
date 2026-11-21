@@ -22,6 +22,16 @@ const KNOWN = {
   },
 };
 
+// 추석 당일(음력 8월 15일). 연휴는 전날~다음날. 2033년 이후는 표를 늘려야 함
+const CHUSEOK = {
+  2027: "2027-09-15",
+  2028: "2028-10-03",
+  2029: "2029-09-22",
+  2030: "2030-09-12",
+  2031: "2031-10-01",
+  2032: "2032-09-19",
+};
+
 function shift(ymd, days) {
   const d = new Date(`${ymd}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -40,6 +50,7 @@ function guess(year, half) {
     avoid: [
       [shift(mon, 7 * 7), shift(mon, 7 * 7 + 5), "중간고사 (8주차 추정)"],
       [shift(mon, 15 * 7), shift(mon, 15 * 7 + 5), "기말고사 (16주차 추정)"],
+      ...(half === 2 && CHUSEOK[year] ? [[shift(CHUSEOK[year], -1), shift(CHUSEOK[year], 1), "추석 연휴"]] : []),
     ],
     guessed: true,
   };

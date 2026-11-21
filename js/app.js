@@ -1100,7 +1100,7 @@ loadDiorama();
   }
   const gen = new Date(state.data.generated);
   const srcCount = new Set(Object.values(state.data.sites).flatMap((s) => Object.keys(s.models))).size;
-  $("status").textContent = state.data.source === "astronomy" ? "예보 연결 없음 · 지도와 밤하늘 이용 가능" : `예보 ${srcCount}개 소스 · ${gen.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 기준${state.data.source === "live" ? " (실시간 Open-Meteo)" : ""}`;
+  $("status").textContent = state.data.source === "astronomy" ? "예보 연결 없음 · 지도와 밤하늘 이용 가능" : `예보 ${srcCount}개 소스 · ${gen.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 기준${state.data.source === "live" ? " (실시간 Open-Meteo)" : state.data.source === "stale" ? " (오래된 예보, 자동 갱신 멈춤)" : ""}`;
   renderModelSelect();
   state.month = todayYmd().slice(0, 7);
   const params = new URLSearchParams(location.search);
