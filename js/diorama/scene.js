@@ -15,9 +15,13 @@ const SKY = {
 };
 
 export class Diorama {
-  constructor(canvas, overlay) {
+  constructor(canvas, overlay, moon) {
     this.canvas = canvas;
     this.overlay = overlay;
+    this.moon = moon;
+    this.waterTime = { value: 0 };
+    this.showClouds = true;
+    this.hasClouds = false;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -62,8 +66,9 @@ export class Diorama {
     }
     root.traverse((o) => {
       if (o.isMesh) {
-        o.castShadow = true;
+        o.castShadow = o.name !== "water";
         o.receiveShadow = true;
+        if (o.name === "water" && o.material?.isMeshStandardMaterial) this.#surfaceWater(o.material);
       }
     });
     this.scene.add(root);
@@ -84,7 +89,6 @@ export class Diorama {
 
     this.#frame();
     this.#makeStars();
-    this.#makeMoon();
     this.#makeClouds();
     return this;
   }
@@ -110,11 +114,37 @@ export class Diorama {
   #frame() {
     const r = Math.max(this.size.x, this.size.z);
     this.radius = r;
-    this.controls.target.copy(this.center);
     this.controls.minDistance = r * 0.5;
-    this.controls.maxDistance = r * 4;
-    // 비스듬한 위에서 (남동쪽)
-    this.camera.position.copy(this.center).add(new THREE.Vector3(r * 0.95, r * 1.05, r * 1.55));
+    this.controls.maxDistance = r * 6;
+    const view = new THREE.Vector3(0.54, 0.82, 1.42).normalize();
+    this.camera.position.copy(this.center).add(view);
+    this.camera.lookAt(this.center);
+    const rotation = this.camera.quaternion;
+    const inverse = rotation.clone().invert();
+    const samples = [];
+    const water = this.root.getObjectByName("water");
+    const positions = water?.geometry?.getAttribute("position");
+    const collect = (x, y, z) => samples.push(new THREE.Vector3(x, y, z).sub(this.center).applyQuaternion(inverse));
+    if (positions) {
+      for (let i = 0; i < positions.count; i++) {
+        const point = new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(water.matrixWorld);
+        collect(point.x, this.box.min.y, point.z);
+        collect(point.x, this.box.max.y, point.z);
+      }
+    } else {
+      for (const x of [this.box.min.x, this.box.max.x]) for (const y of [this.box.min.y, this.box.max.y]) {
+        for (const z of [this.box.min.z, this.box.max.z]) collect(x, y, z);
+      }
+    }
+    const frame = new THREE.Box3().setFromPoints(samples);
+    const middle = frame.getCenter(new THREE.Vector3());
+    const target = this.center.clone().add(new THREE.Vector3(middle.x, middle.y, 0).applyQuaternion(rotation));
+    const slopeY = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 0.75;
+    const slopeX = slopeY * this.camera.aspect;
+    const distance = Math.max(...samples.map((p) => p.z + Math.max(Math.abs(p.x - middle.x) / slopeX,
+      Math.abs(p.y - middle.y) / slopeY)));
+    this.controls.target.copy(target);
+    this.camera.position.copy(target).addScaledVector(view, distance);
     this.camera.near = r / 200;
     this.camera.far = r * 20;
     this.camera.updateProjectionMatrix();
@@ -159,22 +189,76 @@ export class Diorama {
     this.scene.add(this.stars);
   }
 
-  #makeMoon() {
-    const r = this.radius;
-    this.moon = new THREE.Group();
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(r * 0.06, 32, 16), new THREE.MeshBasicMaterial({ color: "#fff4d6" }));
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture("rgba(255,240,200,0.55)"), depthWrite: false, blending: THREE.AdditiveBlending }));
-    glow.scale.setScalar(r * 0.45);
-    this.moon.add(glow, ball);
-    this.moonBall = ball;
-    this.scene.add(this.moon);
+  #surfaceWater(material) {
+    material.roughness = 0.34;
+    material.depthWrite = false;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.waterTime = this.waterTime;
+      shader.vertexShader = `varying vec2 waterXZ;\n${shader.vertexShader}`.replace("#include <begin_vertex>",
+        "#include <begin_vertex>\nwaterXZ = (modelMatrix * vec4(position, 1.0)).xz;");
+      shader.fragmentShader = `uniform float waterTime;\nvarying vec2 waterXZ;\n${shader.fragmentShader}`
+        .replace("#include <color_fragment>", `#include <color_fragment>
+          float swell = sin(dot(waterXZ, vec2(0.036, 0.042))) * cos(dot(waterXZ, vec2(0.058, -0.029)));
+          diffuseColor.rgb *= 0.97 + 0.07 * swell;`)
+        .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+          float gust = 1.7 * sin(dot(waterXZ, vec2(0.041, -0.062)));
+          float swellLine = dot(waterXZ, vec2(0.64, 0.24)) + gust - waterTime;
+          float crossLine = dot(waterXZ, vec2(-0.19, 0.52)) - 0.7 * gust + waterTime * 0.58;
+          vec2 waves = vec2(0.82, 0.31) * cos(swellLine) + vec2(-0.14, 0.36) * cos(crossLine);
+          normal = normalize(normal + mat3(viewMatrix) * vec3(waves.x, 0.0, waves.y) * 0.061);
+          float grazing = 1.0 - abs(dot(normal, normalize(vViewPosition)));
+          diffuseColor.a *= 0.86 + 0.24 * grazing * grazing * grazing;`);
+    };
+  }
+
+  #showMoon(position, illumination) {
+    this.moon.hidden = false;
+    const altitude = THREE.MathUtils.radToDeg(position.altitude);
+    const bearing = (THREE.MathUtils.radToDeg(position.azimuth) + 540) % 360;
+    const directions = ["북", "북동", "동", "남동", "남", "남서", "서", "북서"];
+    this.moon.style.left = `${50 + 30 * Math.sin(position.azimuth)}%`;
+    this.moon.style.top = `${26 - 17 * THREE.MathUtils.clamp(altitude / 72, 0, 1)}%`;
+    this.moon.toggleAttribute("data-below-horizon", altitude < 0);
+    const direction = directions[Math.round(bearing / 45) % 8];
+    this.moon.querySelector("span").textContent = altitude < 0 ? `${direction} · 지평선 아래` : `${direction} ${Math.round(bearing)}° · 고도 ${Math.round(altitude)}°`;
+    const canvas = this.moon.querySelector("canvas");
+    const ctx = canvas.getContext("2d");
+    const n = canvas.width;
+    const pixels = ctx.createImageData(n, n);
+    const lightDepth = 2 * illumination.fraction - 1;
+    const limb = illumination.angle - position.parallacticAngle;
+    const lightSide = Math.sqrt(Math.max(0, 1 - lightDepth ** 2));
+    const lightX = -Math.sin(limb) * lightSide, lightY = -Math.cos(limb) * lightSide;
+    const craters = [[-0.22, 0.30, 0.093], [0.29, 0.18, 0.11], [0.51, -0.28, 0.078],
+                     [-0.49, -0.31, 0.064], [0.07, 0.63, 0.071]];
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const u = (x - n / 2) / (n * 0.43), v = (y - n / 2) / (n * 0.43);
+      const r2 = u * u + v * v;
+      if (r2 >= 1) continue;
+      const sun = u * lightX + v * lightY + Math.sqrt(1 - r2) * lightDepth;
+      const light = THREE.MathUtils.smoothstep(sun, -0.02, 0.10) * (0.77 + 0.23 * Math.max(0, sun));
+      const maria = -0.10 * Math.exp(-12 * (u + 0.22) ** 2 - 5 * (v + 0.27) ** 2)
+        - 0.095 * Math.exp(-10 * (u - 0.24) ** 2 - 18 * (v + 0.09) ** 2)
+        - 0.07 * Math.exp(-17 * (u + 0.09) ** 2 - 26 * (v - 0.43) ** 2);
+      let relief = 0.10 * (cloudNoise(x / 5, y / 5) - 0.50);
+      for (const [cx, cy, radius] of craters) {
+        const d = Math.hypot(u - cx, v - cy) / radius;
+        if (d < 1.45) relief += 0.09 * Math.exp(-23 * (d - 1) ** 2) - 0.07 * Math.exp(-3 * d * d);
+      }
+      const tone = Math.max(0, light * (1.0 + 0.10 * (1 - r2) + maria + relief));
+      const i = (y * n + x) * 4;
+      pixels.data.set([46 + 208 * tone, 41 + 193 * tone, 76 + 129 * tone,
+        255 * THREE.MathUtils.clamp((1 - r2) * n / 4, 0, 1)], i);
+    }
+    ctx.putImageData(pixels, 0, 0);
   }
 
   // ---------- 시각 ----------
   setTime(date) {
     const sun = SunCalc.getPosition(date, LAT0, LON0);
     const mp = SunCalc.getMoonPosition(date, LAT0, LON0);
-    const il = SunCalc.getMoonIllumination(date).fraction;
+    const moon = SunCalc.getMoonIllumination(date);
+    const il = moon.fraction;
     const sunAlt = (sun.altitude * 180) / Math.PI;
     const t = THREE.MathUtils.smoothstep(sunAlt, -14, 4); // 0 밤 → 1 낮
     const dusk = 1 - Math.abs(t - 0.5) * 2;
@@ -189,87 +273,138 @@ export class Diorama {
     this.sky.material.uniforms.bottom.value.copy(b);
     this.sky.material.uniforms.top.value.copy(tp);
     this.stars.material.opacity = 1 - t;
+    this.cloudMesh.material.color.set("#aebbdc").lerp(new THREE.Color("#fff8f1"), t);
 
     // 달: SunCalc 방위각은 남쪽 기준 시계방향
     const dir = (az, alt) =>
       new THREE.Vector3(-Math.sin(az) * Math.cos(alt), Math.sin(alt), Math.cos(az) * Math.cos(alt));
-    const md = dir(mp.azimuth, Math.max(mp.altitude, -0.05));
-    this.moon.position.copy(this.center).addScaledVector(md, this.radius * 3.2);
-    this.moon.visible = mp.altitude > -0.05;
-    this.moonBall.material.color.set(il > 0.5 ? "#fff4d6" : "#f2e6c8");
-    this.moon.scale.setScalar(0.6 + 0.4 * il);
+    this.#showMoon(mp, moon);
 
     // 주 조명: 낮이면 해, 밤이면 달 (달 밝기에 비례)
     const night = t < 0.35;
-    const src = night ? md : dir(sun.azimuth, Math.max(sun.altitude, 0.08));
+    const src = night ? dir(mp.azimuth, Math.max(mp.altitude * 0.63, 0.075)) : dir(sun.azimuth, Math.max(sun.altitude, 0.08));
     this.key.position.copy(this.center).addScaledVector(src, this.radius * 2.5);
     this.key.target.position.copy(this.center);
     this.key.color.set(night ? "#c9d4ff" : dusk > 0.4 ? "#ffc89a" : "#fff1dc");
-    this.key.intensity = night ? (mp.altitude > 0 ? 0.25 + 1.5 * il : 0.12) : 1.2 + 0.6 * t;
+    this.key.intensity = night ? (mp.altitude > 0 ? 0.36 + 1.7 * il : 0.12) : 1.2 + 0.6 * t;
+    this.key.castShadow = !night || mp.altitude > 0;
     this.hemi.color.lerpColors(new THREE.Color("#7c7fd0"), new THREE.Color("#e8ecff"), t);
-    this.hemi.groundColor.lerpColors(new THREE.Color("#2f2850"), new THREE.Color("#8b765f"), t);
-    this.hemi.intensity = 0.55 + 0.6 * t;
+    this.hemi.groundColor.lerpColors(new THREE.Color("#55486b"), new THREE.Color("#8b765f"), t);
+    this.hemi.intensity = 0.67 + 0.48 * t;
     this.lanternOn = 1 - t;
-    for (const m of this.markers) m.glow.material.opacity = 0.35 + 0.65 * this.lanternOn;
+    for (const m of this.markers) m.glow.material.opacity = 0.14 + 0.50 * this.lanternOn;
   }
 
   // ---------- 구름 ----------
   #makeClouds() {
-    const geo = new THREE.IcosahedronGeometry(1, 1);
-    const mat = new THREE.MeshStandardMaterial({ color: "#f4f1ff", roughness: 1, flatShading: true, transparent: true, opacity: 0.92 });
-    this.cloudMesh = new THREE.InstancedMesh(geo, mat, 4000);
-    this.cloudMesh.castShadow = true;
-    this.cloudMesh.count = 0;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(12), 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2));
+    geo.setIndex([0, 2, 1, 0, 3, 2]);
+    const canvas = document.createElement("canvas");
+    canvas.width = 320;
+    canvas.height = 360;
+    this.cloudContext = canvas.getContext("2d");
+    const map = new THREE.CanvasTexture(canvas);
+    map.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, opacity: 0.72 });
+    this.cloudMesh = new THREE.Mesh(geo, mat);
+    this.cloudMesh.visible = false;
+    this.cloudMesh.renderOrder = 2;
     this.scene.add(this.cloudMesh);
   }
 
   // field: 행(북→남) × 열(서→동) 평탄 배열, 0~100
   setClouds(field, lats, lons) {
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const step = Math.abs(lons[1] - lons[0]);
-    const cell = Math.abs(project(lons[0] + step, lats[0]).x - project(lons[0], lats[0]).x);
-    const base = this.box.max.y + this.radius * 0.05;
-    let k = 0;
-    for (let r = 0; r < lats.length; r++) {
-      for (let c = 0; c < lons.length; c++) {
-        const v = field?.[r * lons.length + c];
-        if (v == null || v < 15) continue;
-        const puffs = Math.round(1 + (v / 100) * 5);
-        for (let p = 0; p < puffs && k < 4000; p++) {
-          const h = hash(r * 131 + c * 17 + p * 7);
-          const lon = lons[c] + (h[0] - 0.5) * step;
-          const lat = lats[r] + (h[1] - 0.5) * step;
-          const { x, z } = project(lon, lat);
-          const s = cell * (0.22 + 0.3 * (v / 100)) * (0.6 + 0.6 * h[2]);
-          m.compose(new THREE.Vector3(x, base + h[2] * cell * 0.2, z), q.setFromEuler(new THREE.Euler(0, h[0] * 6, 0)), new THREE.Vector3(s, s * 0.62, s));
-          this.cloudMesh.setMatrixAt(k++, m);
-        }
-      }
+    this.hasClouds = Boolean(field?.some((v) => v > 8)) && lats.length > 1 && lons.length > 1;
+    this.cloudMesh.visible = this.showClouds && this.hasClouds;
+    if (!this.hasClouds) return;
+    const west = lons[0], east = lons.at(-1), north = lats[0], south = lats.at(-1);
+    const pos = this.cloudMesh.geometry.getAttribute("position");
+    [[west, north], [east, north], [east, south], [west, south]].forEach(([lon, lat], i) => {
+      const { x, z } = project(lon, lat);
+      pos.setXYZ(i, x, this.box.max.y + 13, z);
+    });
+    pos.needsUpdate = true;
+    this.cloudMesh.geometry.computeBoundingSphere();
+
+    const context = this.cloudContext;
+    const w = context.canvas.width, h = context.canvas.height;
+    const image = context.createImageData(w, h);
+    const sample = (row, col) => (field[row * lons.length + col] ?? 0) / 100;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const gx = x * (lons.length - 1) / (w - 1), gy = y * (lats.length - 1) / (h - 1);
+      const i = Math.min(lons.length - 2, Math.floor(gx)), j = Math.min(lats.length - 2, Math.floor(gy));
+      const coverage = THREE.MathUtils.lerp(THREE.MathUtils.lerp(sample(j, i), sample(j, i + 1), gx - i),
+        THREE.MathUtils.lerp(sample(j + 1, i), sample(j + 1, i + 1), gx - i), gy - j);
+      const broad = cloudNoise(x / 27 + y / 154, y / 23);
+      const detail = cloudNoise(x / 10, y / 8);
+      const wisps = cloudNoise(x / 4 + y / 81, y / 3.2);
+      const cloud = broad * 0.60 + detail * 0.29 + wisps * 0.11;
+      const threshold = 1.03 - 0.78 * coverage;
+      const fade = THREE.MathUtils.smoothstep(Math.min(x, w - 1 - x, y, h - 1 - y), 1, 31);
+      const opacity = THREE.MathUtils.smoothstep(cloud, threshold - 0.04, threshold + 0.18) * fade * (0.16 + 0.36 * coverage);
+      const gray = 210 + 38 * broad + 7 * detail;
+      const offset = (y * w + x) * 4;
+      image.data.set([gray, gray + 2, gray + 8, 255 * opacity], offset);
     }
-    this.cloudMesh.count = k;
-    this.cloudMesh.instanceMatrix.needsUpdate = true;
+    context.putImageData(image, 0, 0);
+    this.cloudMesh.material.map.needsUpdate = true;
+  }
+
+  setCloudVisibility(visible) {
+    this.showClouds = visible;
+    this.cloudMesh.visible = visible && this.hasClouds;
+  }
+
+  resetView() {
+    const damping = this.controls.enableDamping;
+    this.controls.enableDamping = false;
+    this.controls.update();
+    this.#frame();
+    this.controls.update();
+    this.controls.enableDamping = damping;
   }
 
   // ---------- 관측지 ----------
   // sites: [{ id, name, lat, lon, primary, score }]
   setSites(sites) {
-    for (const m of this.markers) {
-      this.scene.remove(m.glow);
-      m.el.remove();
-    }
+    const previous = new Map(this.markers.map((marker) => [marker.s.id, marker]));
     this.markers = sites.map((s) => {
+      const existing = previous.get(s.id);
+      if (existing) {
+        previous.delete(s.id);
+        existing.s = s;
+        existing.badge.textContent = s.score ?? "–";
+        existing.badge.style.setProperty("--c", scoreHex(s.score));
+        return existing;
+      }
       const p = this.anchors[s.id]?.clone() ?? this.ground(s.lon, s.lat);
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture("rgba(255,196,120,0.9)"), depthWrite: false, transparent: true, blending: THREE.AdditiveBlending }));
-      glow.scale.setScalar(this.radius * (s.primary ? 0.07 : 0.045));
-      glow.position.copy(p).add(new THREE.Vector3(0, this.radius * 0.01, 0));
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture("rgba(255,193,123,0.38)"),
+        opacity: 0.14 + 0.50 * (this.lanternOn ?? 0), depthWrite: false, transparent: true, blending: THREE.AdditiveBlending }));
+      glow.scale.setScalar(this.radius * (s.primary ? 0.023 : 0.016));
+      glow.position.copy(p).add(new THREE.Vector3(0, 2.4, 0));
       this.scene.add(glow);
-      const el = document.createElement("div");
+      const el = document.createElement("button");
+      el.type = "button";
+      el.dataset.site = s.id;
+      el.setAttribute("aria-controls", this.overlay.dataset.controls || "site-detail");
       el.className = "pin" + (s.primary ? " primary" : "");
-      el.innerHTML = `<b style="--c:${scoreHex(s.score)}">${s.score ?? "-"}</b><span>${s.name}</span>`;
+      const badge = document.createElement("b");
+      badge.textContent = s.score ?? "–";
+      badge.style.setProperty("--c", scoreHex(s.score));
+      const name = document.createElement("span");
+      name.textContent = s.name;
+      el.append(badge, name);
       this.overlay.append(el);
-      return { s, p, glow, el };
+      return { s, p, glow, el, badge };
     });
+    for (const marker of previous.values()) {
+      this.scene.remove(marker.glow);
+      marker.glow.material.map.dispose();
+      marker.glow.material.dispose();
+      marker.el.remove();
+    }
   }
 
   // ---------- 그리기 ----------
@@ -283,15 +418,32 @@ export class Diorama {
 
   start() {
     const v = new THREE.Vector3();
-    const loop = () => {
+    const loop = (now = 0) => {
       this.controls.update();
+      this.waterTime.value = now * 0.00065;
       this.renderer.render(this.scene, this.camera);
       const w = this.canvas.clientWidth;
       const h = this.canvas.clientHeight;
+      const placed = [];
       for (const m of this.markers) {
         v.copy(m.p).project(this.camera);
-        m.el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px)`;
-        m.el.style.display = v.z < 1 ? "" : "none";
+        const visible = v.z > -1 && v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+        m.el.hidden = !visible;
+        if (!visible) continue;
+        const x = (v.x + 1) * w / 2;
+        const y = (1 - v.y) * h / 2;
+        const pw = m.el.offsetWidth;
+        const ph = m.el.offsetHeight;
+        const choices = [[x + 9, y - ph - 7], [x - pw - 9, y - ph - 7],
+                         [x + 9, y + 8], [x - pw - 9, y + 8], [x - pw / 2, y - 2 * ph - 14]];
+        const boxes = choices.map(([left, top]) => ({
+          x: THREE.MathUtils.clamp(left, 8, Math.max(8, w - pw - 8)),
+          y: THREE.MathUtils.clamp(top, 8, Math.max(8, h - ph - 8)), w: pw, h: ph,
+        }));
+        const box = boxes.find((a) => placed.every((b) => a.x + a.w + 6 <= b.x || b.x + b.w + 6 <= a.x ||
+          a.y + a.h + 5 <= b.y || b.y + b.h + 5 <= a.y)) ?? boxes[0];
+        placed.push(box);
+        m.el.style.transform = `translate(${box.x}px, ${box.y}px)`;
       }
       requestAnimationFrame(loop);
     };
@@ -300,12 +452,15 @@ export class Diorama {
 }
 
 // ---------- 도움 함수 ----------
-function hash(n) {
-  const f = (k) => {
-    const x = Math.sin(n * 12.9898 + k * 78.233) * 43758.5453;
-    return x - Math.floor(x);
+function cloudNoise(x, y) {
+  const i = Math.floor(x), j = Math.floor(y);
+  const u = THREE.MathUtils.smoothstep(x - i, 0, 1), v = THREE.MathUtils.smoothstep(y - j, 0, 1);
+  const at = (a, b) => {
+    const n = Math.imul(a + 197, 1597334677) ^ Math.imul(b + 937, 3812015801);
+    return ((n ^ n >>> 16) >>> 0) / 4294967295;
   };
-  return [f(1), f(2), f(3)];
+  return THREE.MathUtils.lerp(THREE.MathUtils.lerp(at(i, j), at(i + 1, j), u),
+    THREE.MathUtils.lerp(at(i, j + 1), at(i + 1, j + 1), u), v);
 }
 
 function radialTexture(inner) {

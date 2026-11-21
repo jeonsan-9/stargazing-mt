@@ -8,21 +8,33 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/diorama-map.css" />
   <script>
     // 디자인 테마: 주소 뒤 ?theme=이름 으로 바꿔 볼 수 있음
     (function () {
-      var t = new URLSearchParams(location.search).get("theme") || "glade";
+      var q = new URLSearchParams(location.search);
+      var t = q.get("theme") || "glade";
       if (!/^[a-z]+$/.test(t)) t = "glade";
       document.documentElement.dataset.theme = t;
+      document.documentElement.dataset.map = q.get("map") === "terrain" ? "terrain" : "diorama";
       document.write('<link rel="stylesheet" id="themeCss" href="css/theme-' + t + '.css" />');
+      if (document.documentElement.dataset.map === "terrain") {
+        document.write('<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"><\/script>');
+        document.write('<script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.38/dist.min.js"><\/script>');
+      }
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.38/dist.min.js"></script>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
   <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
 </head>
 <body>
   <div id="map"></div>
+  <div id="diorama-stage">
+    <canvas id="scene" aria-label="한반도 3D 디오라마"></canvas>
+    <div id="moon" hidden><canvas width="144" height="144" role="img" aria-label="달의 위상"></canvas><span></span></div>
+    <div id="pins" data-controls="detailPanel"></div>
+    <div id="map-status" role="status"></div>
+  </div>
   <div id="tiltShift" aria-hidden="true"></div>
   <div id="moonGlow" aria-hidden="true"></div>
   <div id="skyMoon" aria-hidden="true"><span class="disc"></span><span class="tag"></span></div>
@@ -47,6 +59,9 @@
         <span class="club">계명대학교 AAA</span>
       </div>
       <p id="status">예보 불러오는 중…</p>
+      <a class="diorama-link" id="map-link" href="?map=terrain">기존 지도</a>
+      <a class="diorama-link" href="./diorama.html">디오라마 전체 화면</a>
+      <button id="tonight-main" class="diorama-link" type="button" aria-controls="detailPanel">보현산 밤하늘</button>
     </header>
 
     <nav id="tabs" role="tablist">
