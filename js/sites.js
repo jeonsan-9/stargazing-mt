@@ -9,12 +9,12 @@ export const DEPARTURE = {
 };
 
 export const SITES = [
-  // 동아리 기본 관측지
-  { id: "uiseong", name: "의성 달빛공원", region: "경북 의성", lat: 36.353, lon: 128.697, primary: true, verified: false },
-  { id: "bohyeon_obs", name: "보현산 천문대", region: "경북 영천", lat: 36.1641, lon: 128.9767, primary: true, verified: true },
+  // 동아리 MT 장소 (영천)
+    { id: "bohyeon_obs", name: "보현산 천문대", region: "경북 영천", lat: 36.1641, lon: 128.9767, primary: true, verified: true },
   { id: "bohyeon_sci", name: "보현산 천문과학관", region: "경북 영천", lat: 36.1403, lon: 128.9967, primary: true, verified: true },
-  { id: "gajisan", name: "가지산", region: "울산 울주", lat: 35.6203, lon: 129.0029, primary: true, verified: true },
-  // 비교용 확장 후보
+    // 비교용 (영천이 흐릴 때 대안)
+  { id: "uiseong", name: "의성 달빛공원", region: "경북 의성", lat: 36.353, lon: 128.697, primary: false, verified: false },
+  { id: "gajisan", name: "가지산", region: "울산 울주", lat: 35.6203, lon: 129.0029, primary: false, verified: true },
   { id: "yeongyang", name: "영양 별생태체험관", region: "경북 영양", lat: 36.8307, lon: 129.2701, primary: false, verified: true },
   { id: "hwasan", name: "군위 화산마을", region: "대구 군위", lat: 36.117, lon: 128.667, primary: false, verified: false },
   { id: "juwang", name: "청송 주왕산", region: "경북 청송", lat: 36.3567, lon: 129.1506, primary: false, verified: true },

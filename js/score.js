@@ -1,17 +1,20 @@
 // 관측 점수 계산. SunCalc(전역)를 사용합니다.
-// 점수 = 밤 시간(천문박명 사이) 각 시각의 (1 - 구름 중간값) × 달빛 감점 × 습도 감점의 평균 × 100
+//
+// 시간별 점수 = 100 × 어둠 × 구름 × 달 × 습도 × 바람 × 미세먼지 × 시정
+// 밤 점수   = 그 밤 가장 좋은 연속 3시간의 평균 (관측 세션 기준)
+// 기준은 starswithme.com 의 시간별 지수 방식(달 지면 점수가 크게 오름, 구름/바람/미세먼지/습도/시야)을 참고했고,
+// 수치는 모두 무료 소스(Open-Meteo, MET Norway, 7Timer, 기상청)로 직접 계산합니다.
 
 /* global SunCalc */
 
 export const KST = "+09:00";
+const DEG = 180 / Math.PI;
 
 export function parseLocal(str) {
-  // Open-Meteo "2026-11-21T18:00" (Asia/Seoul) -> Date
   return new Date(`${str}:00${KST}`);
 }
 
 export function ymd(date) {
-  // KST 기준 YYYY-MM-DD
   const k = new Date(date.getTime() + 9 * 3600e3);
   return k.toISOString().slice(0, 10);
 }
@@ -36,16 +39,18 @@ export function median(vals) {
 }
 
 export function moonInfo(ymdStr, lat, lon) {
+  const noon = new Date(`${ymdStr}T12:00:00${KST}`);
   const mid = new Date(`${addDays(ymdStr, 1)}T00:00:00${KST}`);
   const ill = SunCalc.getMoonIllumination(mid);
-  const times = SunCalc.getMoonTimes(new Date(`${ymdStr}T12:00:00${KST}`), lat, lon);
-  const timesNext = SunCalc.getMoonTimes(new Date(`${addDays(ymdStr, 1)}T00:00:00${KST}`), lat, lon);
+  const a = SunCalc.getMoonTimes(noon, lat, lon);
+  const b = SunCalc.getMoonTimes(mid, lat, lon);
+  const pickAfter = (x, y) => (x && x > noon ? x : y);
   return {
     fraction: ill.fraction,
     phase: ill.phase,
     phaseName: phaseName(ill.phase),
-    rise: times.rise && times.rise > new Date(`${ymdStr}T12:00:00${KST}`) ? times.rise : timesNext.rise,
-    set: times.set && times.set > new Date(`${ymdStr}T12:00:00${KST}`) ? times.set : timesNext.set,
+    rise: pickAfter(a.rise, b.rise),
+    set: pickAfter(a.set, b.set),
   };
 }
 
@@ -60,58 +65,166 @@ function phaseName(p) {
   return "그믐달";
 }
 
-function rhFactor(rh) {
-  if (rh == null) return 1;
-  if (rh >= 95) return 0.7;
-  if (rh >= 85) return 0.9;
-  return 1;
+// ---------- 요소별 감점 (1 = 감점 없음) ----------
+export const factor = {
+  dark(sunAltDeg) {
+    if (sunAltDeg <= -18) return 1;
+    if (sunAltDeg <= -12) return 0.7;
+    if (sunAltDeg <= -6) return 0.35;
+    return 0;
+  },
+  cloud(pct) {
+    if (pct == null) return 1;
+    return Math.pow(1 - Math.min(100, pct) / 100, 1.6);
+  },
+  moon(altDeg, illum) {
+    if (altDeg <= 0) return 1;
+    return 1 - 0.38 * illum * Math.min(1, (altDeg + 3) / 25);
+  },
+  rh(v) {
+    if (v == null) return 1;
+    if (v >= 95) return 0.75;
+    if (v >= 90) return 0.85;
+    if (v >= 80) return 0.93;
+    return 1;
+  },
+  wind(ms) {
+    if (ms == null) return 1;
+    if (ms > 10) return 0.75;
+    if (ms > 7) return 0.88;
+    if (ms > 5) return 0.95;
+    return 1;
+  },
+  pm25(v) {
+    if (v == null) return 1;
+    if (v > 75) return 0.7;
+    if (v > 35) return 0.82;
+    if (v > 15) return 0.93;
+    return 1;
+  },
+  vis(m) {
+    if (m == null) return 1;
+    if (m < 5000) return 0.8;
+    if (m < 10000) return 0.9;
+    return 1;
+  },
+};
+
+// 하층/중층/상층을 합친 실효 구름량. 상층(권운)은 얇아서 조금 덜 가린다고 봄
+export function effectiveCloud(total, low, mid, high) {
+  if (low == null && mid == null && high == null) return total;
+  const L = (low ?? 0) / 100;
+  const M = (mid ?? 0) / 100;
+  const H = (high ?? 0) / 100;
+  const layered = 100 * (1 - (1 - L) * (1 - M) * (1 - 0.7 * H));
+  return total == null ? layered : 0.5 * total + 0.5 * layered;
 }
 
-// 한 관측지의 하룻밤 점수
-export function scoreNight(data, site, ymdStr) {
+function medianOf(siteData, key, i) {
+  return median(Object.values(siteData.models).map((m) => m[key]?.[i]));
+}
+
+// 한 시각의 점수와 요소들
+export function scoreHour(data, site, i) {
   const siteData = data.sites[site.id];
-  if (!siteData) return null;
-  const { dusk, dawn } = darkWindow(ymdStr, site.lat, site.lon);
-  const modelKeys = Object.keys(siteData.models);
-  const hours = [];
+  const t = parseLocal(data.times[i]);
+  const sunAlt = SunCalc.getPosition(t, site.lat, site.lon).altitude * DEG;
+  const moonAlt = SunCalc.getMoonPosition(t, site.lat, site.lon).altitude * DEG;
+  const illum = SunCalc.getMoonIllumination(t).fraction;
 
-  data.times.forEach((tStr, i) => {
-    const t = parseLocal(tStr);
-    if (t < dusk || t > dawn) return;
-    const clouds = modelKeys.map((m) => siteData.models[m].cloud?.[i]).filter((v) => v != null);
-    if (!clouds.length) return;
-    const rhs = modelKeys.map((m) => siteData.models[m].rh?.[i]).filter((v) => v != null);
-    const med = median(clouds);
-    const spread = Math.max(...clouds) - Math.min(...clouds);
-    const moon = SunCalc.getMoonPosition(t, site.lat, site.lon);
-    const moonUp = moon.altitude > 0;
-    const ill = SunCalc.getMoonIllumination(t).fraction;
-    const moonPenalty = moonUp ? ill : 0;
-    const s = (1 - med / 100) * (1 - 0.6 * moonPenalty) * rhFactor(median(rhs));
-    hours.push({ i, t, cloud: med, spread, moonUp, score: s, n: clouds.length });
+  const totals = Object.values(siteData.models)
+    .map((m) => m.cloud?.[i])
+    .filter((v) => v != null);
+  const total = median(totals);
+  const low = medianOf(siteData, "low", i);
+  const mid = medianOf(siteData, "mid", i);
+  const high = medianOf(siteData, "high", i);
+  const cloud = effectiveCloud(total, low, mid, high);
+  const rh = medianOf(siteData, "rh", i);
+  const wind = medianOf(siteData, "wind", i);
+  const vis = medianOf(siteData, "vis", i);
+  const temp = medianOf(siteData, "temp", i);
+  const pm25 = siteData.air?.pm25?.[i] ?? null;
+  const pm10 = siteData.air?.pm10?.[i] ?? null;
+  const seeing = siteData.astro?.seeing?.[i] ?? null;
+  const transparency = siteData.astro?.transparency?.[i] ?? null;
+
+  const f = {
+    dark: factor.dark(sunAlt),
+    cloud: factor.cloud(cloud),
+    moon: factor.moon(moonAlt, illum),
+    rh: factor.rh(rh),
+    wind: factor.wind(wind),
+    pm: factor.pm25(pm25),
+    vis: factor.vis(vis),
+  };
+  const product = Object.values(f).reduce((a, b) => a * b, 1);
+  const score = totals.length ? Math.round(100 * product) : null;
+  const spread = totals.length > 1 ? Math.max(...totals) - Math.min(...totals) : 0;
+
+  return {
+    i, t, score, f, sunAlt, moonAlt, illum,
+    total, low, mid, high, cloud, rh, wind, vis, temp, pm25, pm10, seeing, transparency,
+    spread, n: totals.length,
+  };
+}
+
+// 저녁 18시 ~ 다음날 06시 시각 인덱스
+export function nightIndices(data, ymdStr) {
+  const start = parseLocal(`${ymdStr}T18:00`);
+  const end = parseLocal(`${addDays(ymdStr, 1)}T06:00`);
+  const idx = [];
+  data.times.forEach((t, i) => {
+    const d = parseLocal(t);
+    if (d >= start && d <= end) idx.push(i);
   });
+  return idx;
+}
 
-  if (!hours.length) return { site, hours, score: null, models: {}, dusk, dawn };
+const WINDOW = 3; // 시간
 
-  const score = Math.round((hours.reduce((a, h) => a + h.score, 0) / hours.length) * 100);
-  const cloud = Math.round(hours.reduce((a, h) => a + h.cloud, 0) / hours.length);
-  const spread = hours.reduce((a, h) => a + h.spread, 0) / hours.length;
-  const agreement = spread < 20 ? "높음" : spread < 40 ? "보통" : "낮음";
+// 한 관측지의 하룻밤 결과
+export function scoreNight(data, site, ymdStr) {
+  if (!data.sites[site.id]) return null;
+  const hours = nightIndices(data, ymdStr).map((i) => scoreHour(data, site, i));
+  const dark = hours.filter((h) => h.f.dark > 0 && h.score != null);
+  const { dusk, dawn } = darkWindow(ymdStr, site.lat, site.lon);
+  if (!dark.length) return { site, hours, score: null, models: {}, dusk, dawn };
 
-  const models = {};
-  for (const m of modelKeys) {
-    const vals = hours.map((h) => siteData.models[m].cloud?.[h.i]).filter((v) => v != null);
-    if (vals.length) models[m] = Math.round(vals.reduce((a, v) => a + v, 0) / vals.length);
+  // 가장 좋은 연속 3시간
+  let best = { avg: -1, from: 0 };
+  for (let k = 0; k + Math.min(WINDOW, dark.length) <= dark.length; k++) {
+    const win = dark.slice(k, k + WINDOW);
+    const avg = win.reduce((a, h) => a + h.score, 0) / win.length;
+    if (avg > best.avg) best = { avg, from: k };
   }
-  return { site, hours, score, cloud, spread, agreement, models, dusk, dawn };
+  const win = dark.slice(best.from, best.from + WINDOW);
+  const peak = dark.reduce((a, h) => (h.score > a.score ? h : a), dark[0]);
+  const goodHours = dark.filter((h) => h.score >= 70).length;
+  const spread = win.reduce((a, h) => a + h.spread, 0) / win.length;
+  const agreement = spread < 20 ? "높음" : spread < 40 ? "보통" : "낮음";
+  const cloud = Math.round(win.reduce((a, h) => a + (h.cloud ?? 0), 0) / win.length);
+
+  // 모델별 평균 구름 (가장 좋은 시간대 기준)
+  const models = {};
+  for (const [m, v] of Object.entries(data.sites[site.id].models)) {
+    const vals = win.map((h) => v.cloud?.[h.i]).filter((x) => x != null);
+    if (vals.length) models[m] = Math.round(vals.reduce((a, x) => a + x, 0) / vals.length);
+  }
+
+  return {
+    site, hours, dusk, dawn, models, agreement, spread, cloud, goodHours,
+    score: Math.round(best.avg),
+    windowStart: win[0].t,
+    windowEnd: new Date(win[win.length - 1].t.getTime() + 3600e3),
+    peak,
+  };
 }
 
 export function scoreColor(score, alpha = 230) {
   if (score == null) return [120, 120, 120, alpha];
-  // 0 빨강 -> 50 노랑 -> 100 초록
   const s = Math.max(0, Math.min(100, score)) / 100;
   const r = s < 0.5 ? 240 : Math.round(240 - (s - 0.5) * 2 * 180);
   const g = s < 0.5 ? Math.round(70 + s * 2 * 150) : 220;
-  const b = 80;
-  return [r, g, b, alpha];
+  return [r, g, 80, alpha];
 }

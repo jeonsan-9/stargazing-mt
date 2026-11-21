@@ -38,6 +38,12 @@ OPEN_METEO_MODELS = [
     "meteofrance_seamless",
 ]
 GRID_MODELS = ["ecmwf_ifs025", "gfs_seamless", "icon_seamless", "jma_seamless"]
+# 하층/중층/상층 구름 격자는 이 모델들만 (파일 크기 때문)
+GRID_LAYER_MODELS = ["ecmwf_ifs025", "gfs_seamless"]
+SITE_VARS = (
+    "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
+    "relative_humidity_2m,wind_speed_10m,visibility,temperature_2m"
+)
 
 
 def load_js_config():
@@ -67,7 +73,21 @@ def grid_axes(g):
     return lats, lons
 
 
+SECRET_PARAMS = {"authKey", "serviceKey"}
+
+
+def scrub(text):
+    """오류 문구에서 키 값을 지움 (errors 는 공개되는 forecast.json 에 들어감)."""
+    text = str(text)
+    for name in ("KMA_AUTH_KEY", "KMA_SERVICE_KEY", "BAZE_API_KEY"):
+        val = os.environ.get(name)
+        if val:
+            text = text.replace(val, "***").replace(urllib.parse.quote(val, safe=""), "***")
+    return re.sub(r"(authKey|serviceKey)=[^&\s]+", r"\1=***", text)
+
+
 def get_json(url, params=None, headers=None, retries=3):
+    base = url
     if params:
         url = url + "?" + urllib.parse.urlencode(params, safe=",:")
     req = urllib.request.Request(url, headers={"User-Agent": UA, **(headers or {})})
@@ -79,7 +99,7 @@ def get_json(url, params=None, headers=None, retries=3):
         except Exception as e:  # noqa: BLE001
             last = e
             time.sleep(2 * (attempt + 1))
-    raise RuntimeError(f"{url[:120]}… 실패: {last}")
+    raise RuntimeError(scrub(f"{base} 실패: {last}"))
 
 
 def pick(hourly, var, model):
@@ -98,10 +118,11 @@ def fetch_open_meteo(sites):
             {
                 "latitude": ",".join(str(s["lat"]) for s in sites),
                 "longitude": ",".join(str(s["lon"]) for s in sites),
-                "hourly": "cloud_cover,relative_humidity_2m,wind_speed_10m",
+                "hourly": SITE_VARS,
                 "models": ",".join(OPEN_METEO_MODELS),
                 "forecast_days": 7,
                 "timezone": "Asia/Seoul",
+                "wind_speed_unit": "ms",
             },
         )
     )
@@ -116,8 +137,13 @@ def fetch_open_meteo(sites):
                 continue
             models[m] = {
                 "cloud": cloud,
+                "low": pick(h, "cloud_cover_low", m),
+                "mid": pick(h, "cloud_cover_mid", m),
+                "high": pick(h, "cloud_cover_high", m),
                 "rh": pick(h, "relative_humidity_2m", m),
                 "wind": pick(h, "wind_speed_10m", m),
+                "vis": pick(h, "visibility", m),
+                "temp": pick(h, "temperature_2m", m),
             }
         out[s["id"]] = {"elevation": r.get("elevation"), "models": models}
     return times, out
@@ -131,20 +157,59 @@ def fetch_grid(lats, lons, times):
             {
                 "latitude": ",".join(str(p[0]) for p in pts),
                 "longitude": ",".join(str(p[1]) for p in pts),
-                "hourly": "cloud_cover",
+                "hourly": "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high",
                 "models": ",".join(GRID_MODELS),
                 "forecast_days": 7,
                 "timezone": "Asia/Seoul",
             },
         )
     )
-    models = {}
-    for m in GRID_MODELS:
-        cols = [pick(r["hourly"], "cloud_cover", m) or [None] * len(times) for r in resp]
+    def field(var, m):
+        cols = [pick(r["hourly"], var, m) or [None] * len(times) for r in resp]
         per_time = [[c[t] if t < len(c) else None for c in cols] for t in range(len(times))]
-        if any(v is not None for row in per_time for v in row):
-            models[m] = per_time
-    return {"lats": lats, "lons": lons, "models": models}
+        return per_time if any(v is not None for row in per_time for v in row) else None
+
+    models = {}
+    layers = {}
+    for m in GRID_MODELS:
+        total = field("cloud_cover", m)
+        if total:
+            models[m] = total
+        if m in GRID_LAYER_MODELS:
+            lay = {k: field(f"cloud_cover_{k}", m) for k in ("low", "mid", "high")}
+            lay = {k: v for k, v in lay.items() if v}
+            if lay:
+                layers[m] = lay
+    return {"lats": lats, "lons": lons, "models": models, "layers": layers}
+
+
+# ---------------- 미세먼지 (Open-Meteo Air Quality, CAMS) ----------------
+def fetch_air(sites, times):
+    resp = as_list(
+        get_json(
+            "https://air-quality-api.open-meteo.com/v1/air-quality",
+            {
+                "latitude": ",".join(str(s["lat"]) for s in sites),
+                "longitude": ",".join(str(s["lon"]) for s in sites),
+                "hourly": "pm2_5,pm10",
+                "forecast_days": 5,
+                "timezone": "Asia/Seoul",
+            },
+        )
+    )
+    idx = index_of(times)
+    out = {}
+    for s, r in zip(sites, resp):
+        h = r["hourly"]
+        pm25 = [None] * len(times)
+        pm10 = [None] * len(times)
+        for k, t in enumerate(h["time"]):
+            i = idx.get(t)
+            if i is not None:
+                pm25[i] = h["pm2_5"][k]
+                pm10[i] = h["pm10"][k]
+        out[s["id"]] = {"pm25": pm25, "pm10": pm10}
+    return out
 
 
 # ---------------- 시간축 맞추기 ----------------
@@ -166,6 +231,9 @@ def fetch_metno(site, times):
     cloud = [None] * len(times)
     rh = [None] * len(times)
     wind = [None] * len(times)
+    low = [None] * len(times)
+    mid = [None] * len(times)
+    high = [None] * len(times)
     for ts in data["properties"]["timeseries"]:
         dt = datetime.fromisoformat(ts["time"].replace("Z", "+00:00"))
         i = idx.get(local_key(dt))
@@ -173,9 +241,12 @@ def fetch_metno(site, times):
             continue
         d = ts["data"]["instant"]["details"]
         cloud[i] = d.get("cloud_area_fraction")
+        low[i] = d.get("cloud_area_fraction_low")
+        mid[i] = d.get("cloud_area_fraction_medium")
+        high[i] = d.get("cloud_area_fraction_high")
         rh[i] = d.get("relative_humidity")
         wind[i] = d.get("wind_speed")
-    return {"cloud": cloud, "rh": rh, "wind": wind}
+    return {"cloud": cloud, "low": low, "mid": mid, "high": high, "rh": rh, "wind": wind}
 
 
 # ---------------- 7Timer ----------------
@@ -272,7 +343,8 @@ def fetch_kma(site, times):
     data = get_json(url, params)
     items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
     if not items:
-        raise RuntimeError(f"기상청 응답에 자료 없음: {str(data)[:200]}")
+        header = data.get("response", {}).get("header", {})
+        raise RuntimeError(scrub(f"기상청 응답에 자료 없음: {header.get('resultCode')} {header.get('resultMsg')}"))
     idx = index_of(times)
     cloud = [None] * len(times)
     rh = [None] * len(times)
@@ -291,7 +363,7 @@ def fetch_kma(site, times):
         elif cat == "REH":
             rh[i] = float(val)
         elif cat == "WSD":
-            wind[i] = float(val) * 3.6  # m/s -> km/h (Open-Meteo와 단위 맞춤)
+            wind[i] = float(val)  # m/s
     # PTY가 SKY보다 먼저 나오면 덮어써지지 않도록 한 번 더 반영
     for it in items:
         if it["category"] == "PTY" and str(it["fcstValue"]) != "0":
@@ -300,6 +372,78 @@ def fetch_kma(site, times):
             if i is not None:
                 cloud[i] = 100
     return {"cloud": cloud, "rh": rh, "wind": wind}
+
+
+# ---------------- 10년 기후 통계 (ERA5) ----------------
+CLIMATE_SITE = "bohyeon_obs"  # 동아리 MT는 항상 영천
+CLIMATE_YEARS = (2016, 2025)
+CLEAR_LIMIT = 30  # 밤 평균 구름 30% 미만이면 "맑은 밤"
+
+
+def fetch_climate(site):
+    y0, y1 = CLIMATE_YEARS
+    data = get_json(
+        "https://archive-api.open-meteo.com/v1/archive",
+        {
+            "latitude": site["lat"],
+            "longitude": site["lon"],
+            "start_date": f"{y0}-01-01",
+            "end_date": f"{y1}-12-31",
+            "hourly": "cloud_cover",
+            "timezone": "Asia/Seoul",
+        },
+    )
+    times = data["hourly"]["time"]
+    cloud = data["hourly"]["cloud_cover"]
+    # 밤 = 그날 21시 ~ 다음날 03시
+    nights = {}
+    for t, c in zip(times, cloud):
+        if c is None:
+            continue
+        d = datetime.strptime(t, "%Y-%m-%dT%H:%M")
+        if d.hour >= 21:
+            key = d.date()
+        elif d.hour <= 3:
+            key = (d - timedelta(days=1)).date()
+        else:
+            continue
+        nights.setdefault(key, []).append(c)
+    # 1년 중 날짜(월-일)별로 모음 (2월 29일은 28일에 합침)
+    by_md = {}
+    for day, vals in nights.items():
+        if len(vals) < 5:
+            continue
+        md = (day.month, min(day.day, 28) if day.month == 2 else day.day)
+        mean = sum(vals) / len(vals)
+        by_md.setdefault(md, []).append(mean)
+    ref = datetime(2025, 1, 1)
+    doy_clear, doy_cloud = [], []
+    for k in range(365):
+        d = ref + timedelta(days=k)
+        # 앞뒤 7일을 합쳐 매끄럽게
+        pool = []
+        for off in range(-7, 8):
+            dd = d + timedelta(days=off)
+            pool += by_md.get((dd.month, min(dd.day, 28) if dd.month == 2 else dd.day), [])
+        doy_clear.append(round(sum(1 for v in pool if v < CLEAR_LIMIT) / len(pool), 3) if pool else None)
+        doy_cloud.append(round(sum(pool) / len(pool), 1) if pool else None)
+    by_month = []
+    for m in range(1, 13):
+        pool = [v for (mm, _), vs in by_md.items() if mm == m for v in vs]
+        by_month.append(
+            {
+                "clear": round(sum(1 for v in pool if v < CLEAR_LIMIT) / len(pool), 3) if pool else None,
+                "cloud": round(sum(pool) / len(pool), 1) if pool else None,
+            }
+        )
+    return {
+        "site": site["id"],
+        "years": list(CLIMATE_YEARS),
+        "clear_limit": CLEAR_LIMIT,
+        "doy_clear": doy_clear,
+        "doy_cloud": doy_cloud,
+        "by_month": by_month,
+    }
 
 
 def main():
@@ -314,7 +458,7 @@ def main():
             try:
                 res = fn(s, times)
             except Exception as e:  # noqa: BLE001
-                errors.append(f"{name} {s['id']}: {e}")
+                errors.append(scrub(f"{name} {s['id']}: {e}"))
                 continue
             if res is None:
                 continue
@@ -326,10 +470,24 @@ def main():
                 out[s["id"]]["models"][name] = res
             time.sleep(0.3)
 
+    try:
+        air = fetch_air(sites, times)
+        for sid, a in air.items():
+            out[sid]["air"] = a
+    except Exception as e:  # noqa: BLE001
+        errors.append(scrub(f"air: {e}"))
+
     lats, lons = grid_axes(g)
     grid = fetch_grid(lats, lons, times)
 
+    climate = None
+    try:
+        climate = fetch_climate(next(x for x in sites if x["id"] == CLIMATE_SITE))
+    except Exception as e:  # noqa: BLE001
+        errors.append(scrub(f"climate: {e}"))
+
     payload = {
+        "climate": climate,
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "timezone": "Asia/Seoul",
         "times": times,
