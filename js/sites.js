@@ -28,6 +28,20 @@ export const SITES = [
   { id: "bandi", name: "반디별천문과학관", region: "전북 무주", lat: 36.0129, lon: 127.7604, primary: false, verified: true },
   { id: "namyeol", name: "남열해돋이해변", region: "전남 고흥", lat: 34.5806, lon: 127.4869, primary: false, verified: true },
   { id: "jeju1100", name: "1100고지 휴게소", region: "제주 서귀포", lat: 33.357832, lon: 126.462805, primary: false, verified: true },
+  { id: "yecheon", name: "예천천문우주센터", region: "경북 예천", lat: 36.7013, lon: 128.5046, primary: false, verified: true },
+  { id: "manhang", name: "만항재", region: "강원 정선", lat: 37.14849, lon: 128.89931, primary: false, verified: true },
+  { id: "yanggu", name: "국토정중앙천문대", region: "강원 양구", lat: 38.06893, lon: 128.02977, primary: false, verified: true },
+  { id: "hwacheon", name: "조경철천문대", region: "강원 화천", lat: 38.11866, lon: 127.43404, primary: false, verified: true },
+  { id: "songam", name: "송암스페이스센터", region: "경기 양주", lat: 37.73572, lon: 126.94276, primary: false, verified: true },
+  { id: "chungju", name: "충주고구려천문과학관", region: "충북 충주", lat: 37.04027, lon: 127.84833, primary: false, verified: true },
+  { id: "cheongyang", name: "칠갑산천문대 스타파크", region: "충남 청양", lat: 36.43373, lon: 126.88993, primary: false, verified: true },
+  { id: "miryang", name: "밀양아리랑우주천문대", region: "경남 밀양", lat: 35.5026, lon: 128.7611, primary: false, verified: true },
+  { id: "gimhae", name: "김해천문대", region: "경남 김해", lat: 35.25317, lon: 128.88748, primary: false, verified: true },
+  { id: "gokseong", name: "곡성섬진강천문대", region: "전남 곡성", lat: 35.22756, lon: 127.36994, primary: false, verified: true },
+  { id: "suncheon", name: "순천만천문대", region: "전남 순천", lat: 34.88578, lon: 127.50928, primary: false, verified: true },
+  { id: "jangheung", name: "정남진천문과학관", region: "전남 장흥", lat: 34.65801, lon: 126.92583, primary: false, verified: true },
+  { id: "goheung", name: "고흥우주천문과학관", region: "전남 고흥", lat: 34.55253, lon: 127.12505, primary: false, verified: true },
+  { id: "seogwipo", name: "서귀포천문과학문화관", region: "제주 서귀포", lat: 33.28883, lon: 126.46039, primary: false, verified: true },
 ];
 
 // 구름 지도 격자 (한반도 남쪽, 0.5° 간격)

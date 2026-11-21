@@ -17,6 +17,20 @@ const siteNotes = {
   bandi: ["박명 시각에 따라 야간 프로그램 시작 시간이 달라집니다. 흐린 날에는 관측권 구매 전 진행 여부를 확인하세요.", "무주군", "https://tour.muju.go.kr/star/contents.do?key=418"],
   namyeol: ["파도가 높고 뒤쪽에는 곰솔숲이 있습니다. 삼각대는 파도가 닿지 않는 곳에 놓고 숲이 가리는 방향을 확인하세요.", "한국관광공사", "https://access.visitkorea.or.kr/ms/detail.do?cotId=de873f51-9a01-46c3-98d7-9a9f35632e3a"],
   jeju1100: ["핀은 1100도로 휴게소입니다. 겨울에는 출발 전에 도로 결빙·차량 통제 공지를 확인하세요.", "제주도 도로 통제", "https://bangjae.jeju.go.kr/comm/noti.htm"],
+  yecheon: ["야간 천체관측과 캠프는 예약제입니다. 주간 체험과 운영 시간이 다르니 야간 회차를 먼저 확인하세요.", "예천천문우주센터", "https://portsky.kr/main/index.html"],
+  manhang: ["핀은 해발 약 1,330m 고갯마루 쉼터입니다. 겨울에는 도로 결빙과 차량 통제를 먼저 확인하세요.", "정선군", "https://www.jeongseon.go.kr/tour"],
+  yanggu: ["야간 관측은 회차제로 운영합니다. 바로 옆 천문대 야영장은 매달 20일에 다음 달 예약을 받습니다.", "양구군 관광", "https://www.ygtour.kr/Home/index"],
+  hwacheon: ["광덕산 해발 약 1,010m입니다. 월요일 휴관이고 강풍·안개 때는 출입이 제한될 수 있으며, 굽은 산길이라 밤 운전에 주의하세요.", "조경철천문대", "http://www.apollostar.kr/"],
+  songam: ["정상 천문대는 케이블카로 오릅니다. 관측 프로그램과 케이블카 운행 일정을 예약 전에 확인하세요. 수도권 불빛이 남쪽 낮은 하늘을 밝힙니다.", "송암스페이스센터", "http://www.songamspacecenter.com/"],
+  chungju: ["월요일 휴관입니다. 30인 이상 단체는 전화나 방문으로만 사전 예약합니다.", "충주고구려천문과학관", "https://www.gogostar.kr/"],
+  cheongyang: ["월요일 휴관입니다. 야간 입장 인원이 제한돼 야간 관람권을 먼저 확보해야 할 수 있습니다.", "청양군", "https://www.cheongyang.go.kr/star.do"],
+  miryang: ["야간 관측은 밀양시 통합예약으로 받습니다. 시내와 가까워 낮은 하늘은 밝은 편입니다.", "밀양시시설관리공단", "https://www.mycf.or.kr/astro/main/"],
+  gimhae: ["분성산 정상이라 주차장이 따로 없습니다. 출발 전에 진입 방법을 확인하세요. 김해 시내 불빛이 강합니다.", "김해천문대", "https://astro.ghct.or.kr/"],
+  gokseong: ["예약은 20인 이상 단체만 받고, 주말·공휴일에는 한 팀만 받습니다. 프로그램 일정과 휴관일은 홈페이지 게시판에 올라옵니다.", "곡성군", "https://www.gokseong.go.kr/star/"],
+  suncheon: ["순천만습지 안에 있는 평지 천문대입니다. 야간 관측은 순천만습지 홈페이지에서 예약합니다.", "순천만습지", "https://scbay.suncheon.go.kr/intro_2024.jsp"],
+  jangheung: ["월요일과 공휴일 다음 날 휴관입니다. 전화 예약은 30인 이상 단체만 받고, 7·8월 성수기에는 받지 않습니다.", "장흥군", "https://www.jangheung.go.kr/star"],
+  goheung: ["저녁 휴게 시간이 있어 야간 회차 시작 시각을 확인하세요. 산 위라 해가 지면 기온이 빠르게 떨어집니다.", "고흥군", "http://star.goheung.go.kr/"],
+  seogwipo: ["월별로 프로그램 시간이 달라 홈페이지에서 확인해야 합니다. 30인 이상 단체는 사전 예약이 필요합니다.", "서귀포시", "https://culture.seogwipo.go.kr/"],
 };
 
 export function renderSiteInfo(container, siteId) {
