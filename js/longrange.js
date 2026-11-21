@@ -130,7 +130,7 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
           const why = `${n.rain != null ? `비 올 확률 ${Math.round(n.rain * 100)}% · ` : ""}이 시기(±1주) 맑고 비 없던 밤 ${Math.round(good * 100)}% · 달 없는 시간 ${Math.round(n.dark * 100)}%`;
           return `<button class="pick" data-ymd="${n.ymd}">
             <span class="rank">${k + 1}</span>
-            <span class="pd"><b>${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WD[d.getUTCDay()]}) 밤 <i class="odds ${oc}">성공 확률 ${o}</i></b><small>${why}</small></span>
+            <span class="pd"><b>${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WD[d.getUTCDay()]}) 밤 <i class="odds ${oc}">날씨 운 ${o}</i></b><small>${why}</small></span>
             ${moonIcon(n.moon.phase, 16)}${badge(n.score, "통계")}</button>`;
         })
         .join("");
