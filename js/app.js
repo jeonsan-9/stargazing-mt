@@ -11,7 +11,7 @@ const CLOUD_ALT = 2500; // 구름층 고도 (m, 과장 전)
 
 // 지도 색감 테마. ?theme=glade 는 아늑한 미니어처(디오라마) 밤 풍경
 const THEME = document.documentElement.dataset.theme || "cute";
-const GLADE = THEME === "glade";
+const GLADE = THEME.startsWith("glade");
 const PAL = GLADE
   ? {
       land: "#56648a", water: "#34446f", waterway: "#3d4f7c", stateLine: "#8d97c4", countryLine: "#a7afd6", road: "#8a86b0",
