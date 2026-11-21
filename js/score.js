@@ -186,7 +186,7 @@ export function nightIndices(data, ymdStr) {
   const idx = [];
   data.times.forEach((t, i) => {
     const d = parseLocal(t);
-    if (d >= start && d <= end) idx.push(i);
+    if (d >= start && d < end) idx.push(i);
   });
   return idx;
 }
@@ -207,7 +207,7 @@ export function scoreNight(data, site, ymdStr) {
   let best = { avg: -1, from: 0 };
   for (let k = 0; k + span <= dark.length; k++) {
     const win = dark.slice(k, k + span);
-    if (win[win.length - 1].i - win[0].i !== win.length - 1) continue;
+    if (win.some((hour, i) => i > 0 && hour.t - win[i - 1].t !== 3600e3)) continue;
     const avg = win.reduce((a, h) => a + h.score, 0) / win.length;
     if (avg > best.avg) best = { avg, from: k };
   }
