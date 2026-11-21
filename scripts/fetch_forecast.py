@@ -67,7 +67,21 @@ def grid_axes(g):
     return lats, lons
 
 
+SECRET_PARAMS = {"authKey", "serviceKey"}
+
+
+def scrub(text):
+    """오류 문구에서 키 값을 지움 (errors 는 공개되는 forecast.json 에 들어감)."""
+    text = str(text)
+    for name in ("KMA_AUTH_KEY", "KMA_SERVICE_KEY", "BAZE_API_KEY"):
+        val = os.environ.get(name)
+        if val:
+            text = text.replace(val, "***").replace(urllib.parse.quote(val, safe=""), "***")
+    return re.sub(r"(authKey|serviceKey)=[^&\s]+", r"\1=***", text)
+
+
 def get_json(url, params=None, headers=None, retries=3):
+    base = url
     if params:
         url = url + "?" + urllib.parse.urlencode(params, safe=",:")
     req = urllib.request.Request(url, headers={"User-Agent": UA, **(headers or {})})
@@ -79,7 +93,7 @@ def get_json(url, params=None, headers=None, retries=3):
         except Exception as e:  # noqa: BLE001
             last = e
             time.sleep(2 * (attempt + 1))
-    raise RuntimeError(f"{url[:120]}… 실패: {last}")
+    raise RuntimeError(scrub(f"{base} 실패: {last}"))
 
 
 def pick(hourly, var, model):
@@ -272,7 +286,8 @@ def fetch_kma(site, times):
     data = get_json(url, params)
     items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
     if not items:
-        raise RuntimeError(f"기상청 응답에 자료 없음: {str(data)[:200]}")
+        header = data.get("response", {}).get("header", {})
+        raise RuntimeError(scrub(f"기상청 응답에 자료 없음: {header.get('resultCode')} {header.get('resultMsg')}"))
     idx = index_of(times)
     cloud = [None] * len(times)
     rh = [None] * len(times)
@@ -314,7 +329,7 @@ def main():
             try:
                 res = fn(s, times)
             except Exception as e:  # noqa: BLE001
-                errors.append(f"{name} {s['id']}: {e}")
+                errors.append(scrub(f"{name} {s['id']}: {e}"))
                 continue
             if res is None:
                 continue
