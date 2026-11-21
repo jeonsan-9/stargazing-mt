@@ -6,6 +6,7 @@ import { loadForecast } from "./data.js";
 import { renderMonth, renderSemester, renderYear, moonIcon } from "./longrange.js";
 import { targetsHTML } from "./targets.js";
 import { scoreNight, scoreColor, moonInfo, darkWindow, parseLocal, ymd, addDays, nightIndices } from "./score.js";
+import { cityLightsEnabled, rememberCityLights } from "./city-lights.js";
 import { LAT0, LON0 } from "./diorama/geo.js";
 import { drawNightSky, nightSky } from "./diorama/night.js";
 
@@ -91,13 +92,16 @@ async function loadDiorama() {
   $("toggle3d").textContent = "시점 초기화";
   $("map-status").textContent = "3D 지도 불러오는 중…";
   try {
-    const { Diorama } = await import("./diorama/scene.js?v=20261122e");
+    const { Diorama } = await import("./diorama/scene.js?v=20261122f");
     const pins = $("pins");
     diorama = await new Diorama($("scene"), pins, $("moon")).load("models/korea.glb?v=20261122d");
     diorama.calibrateWith([...SITES, DEPARTURE]);
+    diorama.setCityLights($("city-view").checked);
     pins.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-site]");
-      if (button && state.data) selectSite(button.dataset.site, false);
+      if (!button) return;
+      if (state.data) selectSite(button.dataset.site, false);
+      else location.href = "./diorama.html?site=" + encodeURIComponent(button.dataset.site);
     });
     diorama.setTime(new Date());
     diorama.setSites(SITES);
@@ -182,6 +186,10 @@ map?.on("load", () => {
     },
     firstSymbol
   );
+  map.addSource("city-lights", {type: "image", url: "./js/diorama/lights-map.png",
+    coordinates: [[124.5, 38.8], [131, 38.8], [131, 32.8], [124.5, 32.8]]});
+  map.addLayer({id: "city-lights", type: "raster", source: "city-lights",
+    layout: {visibility: $("city-view").checked ? "visible" : "none"}, paint: {"raster-opacity": 0.84}}, firstSymbol);
   map.setSky({
     "sky-color": "#0b1020",
     "horizon-color": "#22305a",
@@ -519,7 +527,7 @@ function renderLayers() {
   }
   const layers = [];
 
-  if (state.showCloud) {
+  if (state.showCloud && state.data.grid) {
     // 앞뒤 두 시각의 구름을 슬라이더 위치만큼 섞어서, 끄는 동안 구름이 부드럽게 변하게 함
     const bounds = cloudBounds(state.is3D ? CLOUD_ALT * EXAG : 0);
     const pairs = [
@@ -812,7 +820,7 @@ function renderList() {
     if (r.site.primary !== lastPrimary) {
       const h = document.createElement("div");
       h.className = "group";
-      h.textContent = r.site.primary ? "영천 · 동아리 MT 장소" : "비교용 (영천이 흐릴 때 대안)";
+      h.textContent = r.site.primary ? "영천 · 동아리 MT 장소" : "전국 관측지";
       list.appendChild(h);
       lastPrimary = r.site.primary;
     }
@@ -820,7 +828,7 @@ function renderList() {
     el.className = "site" + (state.selected === r.site.id ? " active" : "");
     el.innerHTML = `
       <span class="score" style="background:rgba(${scoreColor(r.score).slice(0, 3).join(",")},.92)">${r.score ?? "-"}</span>
-      <span class="sname">${r.site.name}${r.site.verified ? "" : ' <em title="좌표 확인 필요">위치 확인 필요</em>'}<small>${r.score == null ? "예보 없음" : `최적 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 좋은 시간 ${r.goodHours}h · 모델 일치 ${r.agreement}`}</small></span>`;
+      <span class="sname">${r.site.name}${r.site.verified ? "" : ' <em title="좌표 확인 필요">위치 확인 필요</em>'}<small>${r.site.region} · ${r.score == null ? "예보 없음" : `최적 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 좋은 시간 ${r.goodHours}h · 모델 일치 ${r.agreement}`}</small></span>`;
     el.onclick = () => selectSite(r.site.id, true);
     list.appendChild(el);
   }
@@ -922,8 +930,8 @@ function renderDetail() {
   box.innerHTML = `
     <h3>${r.site.name} <span class="score" style="background:rgba(${cr},${cg},${cb},.92)">${r.score ?? "-"}</span></h3>
     <a id="site-sky-link" class="diorama-link" href="./sky.html">이곳에서 하늘 보기</a>
-    ${!map ? '<button id="site-model" class="diorama-link" type="button">소품 가까이 보기</button>' : ''}
-    <details><summary>관측지 안내와 방문 후기</summary><div id="main-site-info" class="hint"></div></details>
+    ${!map ? '<button id="site-model" class="diorama-link" type="button">이 지점 확대</button>' : ''}
+    <details><summary>관측 시 주의사항</summary><div id="main-site-info" class="hint"></div></details>
     <p class="lead">${
       r.score == null
         ? "이 밤의 예보 자료가 없습니다."
@@ -996,6 +1004,15 @@ $("toggle3d").onclick = () => {
   state.is3D = !state.is3D;
   $("toggle3d").textContent = state.is3D ? "평면 보기" : "3D 보기";
   apply3D();
+};
+$("city-view").checked = cityLightsEnabled();
+$("city-legend").hidden = !$("city-view").checked;
+$("city-view").onchange = (event) => {
+  const enabled = event.target.checked;
+  rememberCityLights(enabled);
+  $("city-legend").hidden = !enabled;
+  diorama?.setCityLights(enabled);
+  if (map?.getLayer("city-lights")) map.setLayoutProperty("city-lights", "visibility", enabled ? "visible" : "none");
 };
 $("toggleCloud").onchange = (e) => {
   state.showCloud = e.target.checked;
@@ -1075,13 +1092,15 @@ loadDiorama();
   try {
     state.data = await loadForecast();
   } catch (e) {
-    $("status").textContent = "예보를 불러오지 못했습니다: " + e.message;
-    console.error(e);
-    return;
+    // Keep the map, sites and Moon usable when the weather service is unavailable.
+    const first = parseLocal(ymd(new Date(Date.now() - 6 * 3600e3)) + "T18:00").getTime();
+    const times = Array.from({ length: 37 }, (_, i) => new Date(first + (i + 9) * 3600e3).toISOString().slice(0, 16));
+    state.data = { source: "astronomy", times, sites: {} };
+    console.warn("예보 연결 실패", e.message);
   }
   const gen = new Date(state.data.generated);
   const srcCount = new Set(Object.values(state.data.sites).flatMap((s) => Object.keys(s.models))).size;
-  $("status").textContent = `예보 ${srcCount}개 소스 · ${gen.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 기준${state.data.source === "live" ? " (실시간 Open-Meteo)" : ""}`;
+  $("status").textContent = state.data.source === "astronomy" ? "예보 연결 없음 · 지도와 밤하늘 이용 가능" : `예보 ${srcCount}개 소스 · ${gen.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 기준${state.data.source === "live" ? " (실시간 Open-Meteo)" : ""}`;
   renderModelSelect();
   state.month = todayYmd().slice(0, 7);
   const params = new URLSearchParams(location.search);

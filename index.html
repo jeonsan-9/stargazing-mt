@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <link rel="stylesheet" href="css/style.css?v=20261122d" />
-  <link rel="stylesheet" href="css/diorama-map.css?v=20261122d" />
+  <link rel="stylesheet" href="css/diorama-map.css?v=20261122f" />
   <script>
     // 디자인 테마: 주소 뒤 ?theme=이름 으로 바꿔 볼 수 있음
     (function () {
@@ -82,7 +82,7 @@
       <section>
         <h2>관측지 점수</h2>
         <div id="list"></div>
-        <label class="check"><input type="checkbox" id="toggleExtra" checked /> 비교용 관측지도 보기</label>
+        <label class="check"><input type="checkbox" id="toggleExtra" checked /> 전국 관측지 보기</label>
       </section>
     </div>
     <div id="view-month" class="view" hidden></div>
@@ -98,6 +98,7 @@
   <div id="controls">
     <div class="row">
       <label class="check"><input type="checkbox" id="toggleCloud" checked /> 구름</label>
+      <label class="check"><input type="checkbox" id="city-view" checked aria-describedby="city-legend" /> 도시 불빛</label>
       <select id="cloudModel" aria-label="구름 지도 모델"></select>
       <select id="cloudLayer" aria-label="구름 층"></select>
       <span id="moonLabel" class="moonlabel"></span>
@@ -108,8 +109,9 @@
       <input type="range" id="hour" min="0" max="12" value="4" aria-label="시각" />
       <span id="hourLabel"></span>
     </div>
+    <small id="city-legend" class="city-legend"><i aria-hidden="true"></i> 광공해 참고 · 약한 불빛 → 강한 불빛 <a href="https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VJ146A4" target="_blank" rel="noopener">VIIRS 2024</a></small>
   </div>
 
-  <script type="module" src="js/app.js?v=20261122e"></script>
+  <script type="module" src="js/app.js?v=20261122f"></script>
 </body>
 </html>

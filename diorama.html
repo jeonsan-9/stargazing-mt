@@ -6,7 +6,7 @@
   <title>AAA 징크스 타파기 · 디오라마</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/diorama-map.css?v=20261122d" />
+  <link rel="stylesheet" href="css/diorama-map.css?v=20261122f" />
   <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
   <script type="importmap">
     { "imports": {
@@ -60,8 +60,8 @@
     <div class="title"><h2 id="site-title" tabindex="-1"></h2><button id="close-site" type="button">닫기</button></div>
     <p id="site-summary"></p>
     <a id="site-sky" href="./sky.html">이곳에서 하늘 보기</a>
-    <button id="site-model" type="button">소품 가까이 보기</button>
-    <details><summary>관측지 안내와 방문 후기</summary><div id="site-notes"></div></details>
+    <button id="site-model" type="button">이 지점 확대</button>
+    <details><summary>관측 시 주의사항</summary><div id="site-notes"></div></details>
     <table id="site-hours" hidden><thead><tr><th>시간</th><th>점수</th><th>강수</th><th>구름</th></tr></thead><tbody></tbody></table>
     <section id="night-sky" aria-labelledby="night-title">
       <strong id="night-title">밤하늘</strong>
@@ -77,14 +77,17 @@
     <div class="toolbar">
       <select id="forecastDay" aria-label="예보 날짜" disabled></select>
       <button id="cloud-view" type="button" aria-pressed="true">예보 구름</button>
+      <button id="city-view" type="button" aria-pressed="true" aria-describedby="city-legend">도시 불빛</button>
       <button id="reset-view" type="button">시점 초기화</button>
     </div>
     <label for="slider"><span id="when">-</span><span id="moonTxt"></span></label>
     <input id="slider" type="range" min="0" max="0" value="0" aria-label="예보 시간" disabled />
+    <small id="city-legend" class="city-legend"><i aria-hidden="true"></i> 광공해 참고 · 약한 불빛 → 강한 불빛 <a href="https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VJ146A4" target="_blank" rel="noopener">VIIRS 2024</a></small>
     <div id="note" role="status">예보 불러오는 중…</div>
   </div>
   <script type="module">
-    import { Diorama } from "./js/diorama/scene.js?v=20261122e";
+    import { Diorama } from "./js/diorama/scene.js?v=20261122f";
+    import { cityLightsEnabled, rememberCityLights } from "./js/city-lights.js";
     import { loadForecast } from "./js/data.js";
     import { SITES, DEPARTURE } from "./js/sites.js";
     import { renderSiteInfo } from "./js/site-info.js";
@@ -126,8 +129,8 @@
       document.getElementById("site-title").textContent = selection.name;
       const hour = weather(selection, index);
       document.getElementById("site-summary").textContent = hour?.n
-        ? `${selection.primary ? "MT 관측지" : "비교 관측지"} · 예보 모델 ${hour.n}개`
-        : `${selection.primary ? "MT 관측지" : "비교 관측지"} · 이 시간의 예보 없음`;
+        ? `${selection.region} · 예보 모델 ${hour.n}개`
+        : `${selection.region} · 이 시간의 예보 없음`;
       const rows = [];
       for (let offset = 0; offset < 3; offset++) {
         const item = weather(selection, index + offset);
@@ -186,6 +189,17 @@
       if (i >= 0) { slider.value = i; show(i); }
     }
 
+    const city = document.getElementById("city-view");
+    city.setAttribute("aria-pressed", String(cityLightsEnabled()));
+    document.getElementById("city-legend").hidden = !cityLightsEnabled();
+    d.setCityLights(cityLightsEnabled());
+    city.addEventListener("click", () => {
+      const enabled = city.getAttribute("aria-pressed") !== "true";
+      rememberCityLights(enabled);
+      city.setAttribute("aria-pressed", String(enabled));
+      document.getElementById("city-legend").hidden = !enabled;
+      d.setCityLights(enabled);
+    });
     const clouds = document.getElementById("cloud-view");
     clouds.addEventListener("click", () => {
       const showClouds = clouds.getAttribute("aria-pressed") !== "true";

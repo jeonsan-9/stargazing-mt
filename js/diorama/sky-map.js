@@ -2,7 +2,8 @@ const RAD = Math.PI / 180;
 
 function project(alt, az, x, y, radius) {
   const distance = radius * (1 - alt / 90);
-  return [x + Math.sin(az * RAD) * distance, y - Math.cos(az * RAD) * distance];
+  // 하늘을 올려다본 방향: 북쪽 위, 동쪽 왼쪽
+  return [x - Math.sin(az * RAD) * distance, y - Math.cos(az * RAD) * distance];
 }
 
 function traceFrame(ctx, { alt, az }, frame, x, y, radius, color) {
@@ -33,7 +34,7 @@ function traceFrame(ctx, { alt, az }, frame, x, y, radius, color) {
   ctx.stroke();
 }
 
-export function drawSkyMap(canvas, points, track, selected, frame, comparison) {
+export function drawSkyMap(canvas, points, track, selected, frame, comparison, figures = []) {
   const ctx = canvas.getContext("2d");
   const x = canvas.width / 2, y = canvas.height / 2;
   const radius = Math.min(x, y) - 38;
@@ -62,6 +63,28 @@ export function drawSkyMap(canvas, points, track, selected, frame, comparison) {
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.clip();
+  if (figures.length) {
+    ctx.beginPath();
+    const names = [];
+    for (const { name, lines } of figures) {
+      const shown = [];
+      for (const [p, q] of lines) {
+        if (p.alt < 0 && q.alt < 0) continue;
+        const a = project(p.alt, p.az, x, y, radius), b = project(q.alt, q.az, x, y, radius);
+        ctx.moveTo(...a); ctx.lineTo(...b);
+        if (p.alt >= 0) shown.push(a);
+        if (q.alt >= 0) shown.push(b);
+      }
+      if (shown.length >= 3) names.push([name, shown.reduce((s, [px]) => s + px, 0) / shown.length, Math.max(...shown.map(([, py]) => py)) + 13]);
+    }
+    ctx.strokeStyle = "rgba(160, 178, 238, 0.42)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(186, 198, 245, 0.78)";
+    for (const [name, nx, ny] of names) ctx.fillText(name, nx, ny);
+  }
   ctx.beginPath();
   let visible = false;
   for (const { target: alt, targetAz: az } of track) {

@@ -7,10 +7,19 @@ export const LON0 = 127.8;
 export const LAT0 = 35.9;
 const KX = 111.32 * Math.cos((LAT0 * Math.PI) / 180);
 const KZ = 110.57;
+const RAD = Math.PI / 180;
+const E2 = 0.00669437999014; // WGS84
 
 // 약속대로의 km 좌표
 export function lonLatToKm(lon, lat) {
-  return { x: (lon - LON0) * KX, z: -(lat - LAT0) * KZ };
+  // Local transverse Mercator series, matching the DEM and light textures.
+  const phi = lat * RAD, mid = (lat + LAT0) * RAD / 2;
+  const sin = Math.sin(phi), cos = Math.cos(phi), tan = Math.tan(phi);
+  const n = 6378.137 / Math.sqrt(1 - E2 * sin * sin);
+  const m = 6378.137 * (1 - E2) / (1 - E2 * Math.sin(mid) ** 2) ** 1.5;
+  const a = (lon - LON0) * RAD * cos;
+  return { x: n * (a + (1 - tan * tan + E2 * cos * cos / (1 - E2)) * a ** 3 / 6),
+    z: -(m * (lat - LAT0) * RAD + n * tan * a * a / 2) };
 }
 
 // 보정: 모델 좌표 = s·R(θ)·km + t (XZ 평면 닮음 변환)
@@ -29,7 +38,13 @@ export function unproject(mx, mz) {
   const z0 = mz - cal.tz;
   const x = (cal.c * x0 + cal.n * z0) / cal.s;
   const z = (-cal.n * x0 + cal.c * z0) / cal.s;
-  return { lon: x / KX + LON0, lat: -z / KZ + LAT0 };
+  let lon = x / KX + LON0, lat = -z / KZ + LAT0;
+  for (let i = 0; i < 3; i++) {
+    const estimate = lonLatToKm(lon, lat);
+    lon += (x - estimate.x) / KX;
+    lat -= (z - estimate.z) / KZ;
+  }
+  return { lon, lat };
 }
 
 // pairs: [{ km:{x,z}, model:{x,z} }] 2개 이상 → 최소제곱 닮음 변환

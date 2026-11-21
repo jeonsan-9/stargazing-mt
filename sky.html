@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>현장 하늘 · AAA 징크스 타파기</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap">
-  <link rel="stylesheet" href="css/sky.css">
+  <link rel="stylesheet" href="css/sky.css?v=20261122g">
   <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
 </head>
 <body>
@@ -22,6 +22,8 @@
       <button data-bearing="0" type="button">북</button><button data-bearing="90" type="button">동</button>
       <button data-bearing="180" type="button">남</button><button data-bearing="270" type="button">서</button>
       <button id="look-moon" type="button">달 방향</button>
+      <label><input id="city-view" type="checkbox" checked> 도시 불빛</label>
+      <label><input id="constellations" type="checkbox" checked> 별자리</label>
       <span id="bearing" aria-live="off"></span>
     </div>
     <div class="time">
@@ -29,8 +31,8 @@
       <label class="scrub">시각 <output id="time" for="minute"></output><input id="minute" type="range" min="0" max="144" value="48"></label>
     </div>
     <p id="status" role="status"></p>
-    <details><summary>이 화면의 데이터</summary><p>맑은 하늘을 가정합니다. 산 능선은 높이 자료로 근사했으며 건물과 나무는 생략했습니다. <a href="https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/copernicus-dem">Copernicus DEM</a> · <a href="https://github.com/ofrohn/d3-celestial/blob/master/data/stars.6.json">별 목록</a> · <a href="js/diorama/stars-LICENSE.txt">라이선스</a></p></details>
+    <details><summary>이 화면의 데이터</summary><p>맑은 하늘을 가정합니다. 지평선의 주황빛은 주변 65km 안에 분포한 야간 광원에서 추정한 방향별 표현입니다. <a href="https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VJ146A4">NASA VIIRS 2024</a>. 산 능선은 높이 자료로 근사했으며 건물과 나무는 생략했습니다. 별자리 선은 한국에서 잘 보이는 대표 별자리 19개만 그렸습니다. <a href="https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/copernicus-dem">Copernicus DEM</a> · <a href="https://github.com/ofrohn/d3-celestial/blob/master/data/stars.6.json">별 목록</a> · <a href="js/diorama/stars-LICENSE.txt">라이선스</a></p></details>
   </div>
-  <script type="module" src="js/sky.js?v=20261122d"></script>
+  <script type="module" src="js/sky.js?v=20261122g"></script>
 </body>
 </html>

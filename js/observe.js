@@ -1,17 +1,27 @@
 import { SITES } from "./sites.js";
 import { renderSiteInfo } from "./site-info.js";
-import { observeTarget, observingTargets, searchObservingTargets } from "./targets.js";
+import { altAz, observeTarget, observingTargets, searchObservingTargets } from "./targets.js";
+import { figureSegments, nearestFigure } from "./constellations.js";
+import { initMarathon, updateMarathon } from "./marathon.js?v=20261122h";
 import { ymd } from "./score.js";
 import { drawNightSky, nightSky } from "./diorama/night.js";
 import { cameraFrame, drawCameraFrame } from "./diorama/optics.js?v=20261122d";
-import { drawSkyMap } from "./diorama/sky-map.js";
+import { drawSkyMap } from "./diorama/sky-map.js?v=20261122e";
 
 const $ = (id) => document.getElementById(id);
 const query = new URLSearchParams(location.search);
 const clock = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Seoul" });
 const directions = ["북", "북동", "동", "남동", "남", "남서", "서", "북서"];
-const presets = { full: [36, 24], aps: [23.5, 15.6], mft: [17.3, 13] };
-let choices, target, sky, skyKey, apparentSize, skyPoints = [], skyHits = [], editingSession;
+const presets = { full: [36, 24], aps: [23.5, 15.6], mft: [17.3, 13],
+  // 스마트 망원경: 제조사 공개 센서 해상도×화소 크기와 초점거리
+  seestar_s50: [5.57, 3.13], seestar_s30: [5.57, 3.13], dwarf3: [7.68, 4.32] };
+const smartFocal = { seestar_s50: 250, seestar_s30: 150, dwarf3: 150 };
+let choices, target, sky, skyKey, apparentSize, skyPoints = [], skyHits = [], editingSession, figures = [];
+let starCatalog = [];
+const figuresKey = "aaa.observe.figures.v1";
+$("show-figures").checked = localStorage.getItem(figuresKey) !== "off";
+fetch(new URL("./diorama/stars.json", import.meta.url)).then((response) => response.ok ? response.json() : [])
+  .then((stars) => { starCatalog = stars; updatePosition(); }).catch(() => {});
 
 function readSaved(key) {
   try {
@@ -53,10 +63,12 @@ function selectedSite() {
 function updateSearch(preferred = $("target").value || "M31") {
   choices = searchObservingTargets($("search").value);
   $("target").replaceChildren(...choices.map((item) =>
-    new Option(item.id === "moon" || item.kind === "행성" ? item.name : `${item.id} · ${item.name}`, item.id)));
+    new Option(item.id === "moon" || item.kind === "행성" || item.kind === "좌표" ? item.name : `${item.id} · ${item.name}`, item.id)));
   if (choices.some(({ id }) => id === preferred)) $("target").value = preferred;
+  else if (choices[0]?.kind === "좌표") $("target").value = choices[0].id;
   $("target").disabled = choices.length === 0;
-  $("search-status").textContent = choices.length ? `${choices.length}개 대상` : "검색 결과가 없습니다. 메시에 번호나 대상 이름을 바꿔보세요.";
+  $("search-status").textContent = choices[0]?.kind === "좌표" ? "입력한 적경·적위 위치를 계산합니다."
+    : choices.length ? `${choices.length}개 대상` : "검색 결과가 없습니다. 메시에 번호, 이름, 또는 좌표(예: 5h35m -5°23′)를 넣어보세요.";
   selectTarget();
 }
 
@@ -99,13 +111,18 @@ function updateSky() {
         if (previous && (previous.target < 0) !== (sample.target < 0)) {
           const ratio = -previous.target / (sample.target - previous.target);
           const time = new Date(+previous.time + ratio * (sample.time - previous.time));
-          crossings.push(`${sample.target >= 0 ? "뜸" : "짐"} ${clock.format(time)}`);
+          crossings.push([time, `${sample.target >= 0 ? "뜸" : "짐"} ${clock.format(time)}`]);
         }
       }
     }
     $("best").textContent = highest ? `해 고도 −12° 이하인 시간 중 최고 고도 · ${clock.format(highest.time)} ${Math.round(highest.target)}°`
       : target ? "해 고도 −12° 이하인 시간에 지평선 위로 올라오지 않습니다." : "";
-    $("crossings").textContent = crossings.length ? `지평선 통과 · ${crossings.join(" · ")}` : "";
+    // 남중: 밤 동안 가장 높이 오르는 순간이 양 끝이 아닐 때만 표시
+    const samples = sky.samples;
+    const peak = target && samples.length ? samples.reduce((best, sample, index) => sample.target > samples[best].target ? index : best, 0) : -1;
+    if (peak > 0 && peak < samples.length - 1 && samples[peak].target > 0 && target.id !== "moon")
+      crossings.push([samples[peak].time, `남중 ${clock.format(samples[peak].time)} (${Math.round(samples[peak].target)}°)`]);
+    $("crossings").textContent = crossings.length ? `뜨고 지는 시각 · ${crossings.sort((a, b) => a[0] - b[0]).map(([, label]) => label).join(" · ")}` : "";
   }
   updatePosition();
 }
@@ -121,12 +138,18 @@ function updatePosition() {
   if (sky && time) drawNightSky($("altitude"), sky, time);
   const pos = target && time ? observeTarget(target, time, selectedSite()) : null;
   skyPoints = time ? observingTargets.map((item) => ({ ...item, ...observeTarget(item, time, selectedSite()) })) : [];
+  if (pos && target && !observingTargets.includes(target)) skyPoints.push({ ...target, ...pos });
+  const site = selectedSite();
+  figures = time && starCatalog.length ? figureSegments(starCatalog, (ra, dec) => altAz(ra, dec, time, site.lat, site.lon)) : [];
+  const near = pos && target?.id !== "moon" ? nearestFigure(figures, pos.alt, pos.az) : null;
+  $("constellation").textContent = !figures.length ? "–" : near ? near.name : "대표 별자리 밖";
   $("alt").textContent = pos ? `${Math.round(pos.alt)}°${pos.alt < 0 ? " · 지평선 아래" : ""}` : "–";
   $("az").textContent = pos ? `${directions[Math.round(pos.az / 45) % 8]} ${Math.round(pos.az) % 360}°` : "–";
   $("separation").textContent = pos?.moonSeparation != null ? `${Math.round(pos.moonSeparation)}°` : "–";
   apparentSize = pos?.size;
   $("session-context").textContent = target && time ? `${$("night").value} 밤 · ${clock.format(time)} KST · ${selectedSite().name} · ${target.name}` : "관측지, 날짜와 대상을 선택하세요.";
   $("session-plan").disabled = $("session-complete").disabled = !time || !target;
+  updateMarathon(sky?.samples, site, $("night").value, time);
   updateFraming();
 }
 
@@ -169,7 +192,7 @@ function updateFraming() {
   const frame = toFrame(currentEquipment(), size);
   const comparison = toFrame(saved, size);
   drawCameraFrame($("framing"), frame, comparison);
-  skyHits = drawSkyMap($("sky-map"), skyPoints, sky?.samples ?? [], target?.id, frame, comparison);
+  skyHits = drawSkyMap($("sky-map"), skyPoints, sky?.samples ?? [], target?.id, frame, comparison, $("show-figures").checked ? figures : []);
   $("frame-legend-compare").hidden = !comparison;
   $("gear-result").textContent = comparison ? `${saved.name} · ${saved.focal} mm · ${frameSize(comparison)}` : "";
   $("gear-load").disabled = $("gear-remove").disabled = !saved;
@@ -345,3 +368,19 @@ $("session-export").addEventListener("click", exportSessions);
 renderGear();
 renderSessions();
 updateSearch(query.get("target") ?? "M31");
+
+$("show-figures").addEventListener("change", () => {
+  localStorage.setItem(figuresKey, $("show-figures").checked ? "on" : "off");
+  updateFraming();
+});
+
+$("sensor").addEventListener("change", () => {
+  const focal = smartFocal[$("sensor").value];
+  if (focal) { $("focal").value = focal; updateFraming(); }
+});
+
+initMarathon((id) => {
+  $("search").value = id;
+  updateSearch(id);
+  $("search-title").scrollIntoView({ behavior: "smooth", block: "start" });
+});

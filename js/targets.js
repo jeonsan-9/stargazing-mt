@@ -5,6 +5,7 @@
 
 /* global SunCalc */
 import { addDays, darkWindow } from "./score.js";
+import { MESSIER } from "./messier.js";
 
 const RAD = Math.PI / 180;
 const DEG = 180 / Math.PI;
@@ -123,7 +124,7 @@ const SHOWERS = [
   ["작은곰자리 유성우", 12, 22, 1, 10, 14.47, 75.5],
 ];
 
-const ICON = { 행성: "🪐", 성단: "✨", 구상성단: "🔆", 성운: "🌫️", 행성상성운: "💫", 은하: "🌀", 이중성: "⭐", 은하수: "🌌", 유성우: "☄️", 달: "🌙" };
+const ICON = { 행성: "🪐", 성단: "✨", 구상성단: "🔆", 성운: "🌫️", 행성상성운: "💫", 은하: "🌀", 이중성: "⭐", 은하수: "🌌", 유성우: "☄️", 달: "🌙", 별무리: "⭐" };
 
 // ---------- 좌표 변환 ----------
 export function altAz(raH, decD, date, lat, lon) {
@@ -175,15 +176,49 @@ export const observingTargets = [
     return { id, name, ra, dec, kind, aliases, size: major && minor ? [major, minor] : null };
   }),
 ];
+// 위 대표 대상에 없는 메시에 천체를 채워 110개 모두 검색되게 한다.
+{
+  const known = new Set(observingTargets.flatMap(({ aliases }) => aliases.map(catalogKey)));
+  for (const [number, ra, dec, mag, kind, ngc, size, name] of MESSIER) {
+    const id = `M${number}`;
+    if (known.has(catalogKey(id))) continue;
+    observingTargets.push({ id, name: name || kind, ra, dec, mag, kind, aliases: [id, ngc].filter(Boolean), size });
+  }
+}
 
 function catalogKey(value) {
   return value.normalize("NFKC").toLowerCase().replace(/\s+/g, "")
     .replace(/^messier/, "m").replace(/^(m|ngc|ic)0+(?=\d)/, "$1");
 }
 
+// "5h35m17s -5°23′", "5:35:17 -5:23:28", "83.82 -5.39"(도), "5.59 -5.39"(시) 형식의 적경·적위
+function sexagesimal(text) {
+  const sign = /^\s*-/.test(text) ? -1 : 1;
+  const parts = text.replace(/^[\s+-]+/, "").split(/[hHdD°:'′"″ms\s]+/).filter(Boolean).map(Number);
+  if (!parts.length || parts.length > 3 || parts.some((n) => !Number.isFinite(n))) return null;
+  return sign * (parts[0] + (parts[1] ?? 0) / 60 + (parts[2] ?? 0) / 3600);
+}
+
+export function parseCoordinates(query) {
+  const text = query.normalize("NFKC").trim().replace(/^(ra|적경)\s*/i, "").replace(/(dec|적위)\s*/i, "");
+  const match = text.match(/^([0-9.]+(?:[hH:\s][0-9.]+(?:[mM:'′\s][0-9.]+s?)?)?[hH]?)\s*[, ]\s*([+-]?\s*[0-9.]+(?:[dD°:\s][0-9.]+(?:['′:\s][0-9.]+["″′]{0,2})?)?['′°dD]?)$/);
+  if (!match) return null;
+  const sexRa = /[hH:]|\s/.test(match[1].trim());
+  let ra = sexagesimal(match[1]);
+  const dec = sexagesimal(match[2].replace(/\s+/g, " "));
+  if (ra == null || dec == null) return null;
+  if (!sexRa && !/[hH]$/.test(match[1]) && ra > 24) ra /= 15;
+  if (ra < 0 || ra >= 24 || Math.abs(dec) > 90) return null;
+  const hh = Math.floor(ra), mm = (ra - hh) * 60;
+  return { id: `coord:${ra.toFixed(4)},${dec.toFixed(4)}`, name: `적경 ${hh}h ${mm.toFixed(1)}m · 적위 ${dec >= 0 ? "+" : ""}${dec.toFixed(2)}°`,
+    ra, dec, kind: "좌표", aliases: [], size: null };
+}
+
 export function searchObservingTargets(query) {
   const key = catalogKey(query);
   if (!key) return observingTargets;
+  const coordinate = parseCoordinates(query);
+  if (coordinate) return [coordinate];
   const matches = observingTargets.filter(({ name, aliases }) => [name, ...aliases]
     .some((value) => catalogKey(value).includes(key)));
   return matches.sort((a, b) => Number(b.aliases.some((alias) => catalogKey(alias) === key))

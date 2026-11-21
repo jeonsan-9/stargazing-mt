@@ -21,6 +21,9 @@ export class Diorama {
     this.overlay = overlay;
     this.moon = moon;
     this.waterTime = { value: 0 };
+    this.cityLightStrength = { value: 0 };
+    this.showCityLights = true;
+    this.nightLights = 1;
     this.showClouds = true;
     this.hasClouds = false;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
@@ -29,6 +32,7 @@ export class Diorama {
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.autoUpdate = false;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(28, 1, 1, 20000);
@@ -75,6 +79,12 @@ export class Diorama {
     this.scene.add(root);
     this.root = root;
     root.updateMatrixWorld(true);
+    const land = root.getObjectByName("island");
+    const water = root.getObjectByName("water");
+    if (land?.isMesh && water?.isMesh) {
+      const seaLevel = new THREE.Box3().setFromObject(water).max.y;
+      this.#surfaceLights(land.material, seaLevel);
+    }
     this.box = new THREE.Box3().setFromObject(root);
     this.size = this.box.getSize(new THREE.Vector3());
     this.center = this.box.getCenter(new THREE.Vector3());
@@ -192,6 +202,31 @@ export class Diorama {
     this.scene.add(this.stars);
   }
 
+  #surfaceLights(material, seaLevel) {
+    const texture = new THREE.TextureLoader().load(new URL("./lights-terrain.png", import.meta.url).href);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.cityLights = { value: texture };
+      shader.uniforms.cityLightStrength = this.cityLightStrength;
+      shader.vertexShader = "varying vec3 cityWorld;\n" + shader.vertexShader.replace("#include <begin_vertex>",
+        "#include <begin_vertex>\ncityWorld = (modelMatrix * vec4(position, 1.0)).xyz;");
+      shader.fragmentShader = "varying vec3 cityWorld; uniform sampler2D cityLights; uniform float cityLightStrength;\n" +
+        shader.fragmentShader.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+          vec2 cityUv = vec2(cityWorld.x, -cityWorld.z) / 680.0 + 0.5;
+          vec4 lights = texture2D(cityLights, cityUv);
+          float aboveWater = smoothstep(${seaLevel.toFixed(4)}, ${(seaLevel + 0.6).toFixed(4)}, cityWorld.y);
+          vec3 cityGlow = lights.rgb * lights.a * cityLightStrength * aboveWater;
+          // 밝은 도심이 흰색으로 타지 않도록 부드럽게 눌러 주황빛을 남긴다.
+          cityGlow = 1.5 * cityGlow / (1.0 + cityGlow) * vec3(1.0, 0.8, 0.56);
+          totalEmissiveRadiance += cityGlow;
+        `);
+    };
+  }
+
+  setCityLights(visible) {
+    this.showCityLights = visible;
+  }
+
   #surfaceWater(material) {
     material.roughness = 0.34;
     material.depthWrite = false;
@@ -219,15 +254,19 @@ export class Diorama {
     this.moonTexture.colorSpace = THREE.SRGBColorSpace;
     this.moonDisc = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.moonTexture, transparent: true,
       depthWrite: false, toneMapped: false }));
-    this.moonDisc.scale.setScalar(this.radius * 0.122);
+    this.moonDisc.scale.setScalar(this.radius * 0.067);
     this.moonDisc.visible = false;
-    this.moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture("rgba(255,223,166,0.21)"),
+    this.moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialTexture("rgba(255,241,203,0.34)", true),
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-    this.moonGlow.scale.setScalar(this.radius * 0.30);
+    this.moonGlow.scale.setScalar(this.radius * 0.21);
     this.moonGlow.visible = false;
     this.moonGlow.renderOrder = 3;
     this.moonDisc.renderOrder = 4;
-    this.moonBeam = new THREE.SpotLight("#becbff", 0, this.radius * 0.9, Math.PI / 3, 0.78, 2);
+    this.moonBeam = new THREE.SpotLight("#e2e8ff", 0, this.radius * 1.25, 1.08, 0.84, 2);
+    this.moonBeam.shadow.mapSize.set(2048, 2048);
+    this.moonBeam.shadow.camera.near = 1.5;
+    this.moonBeam.shadow.bias = -0.00012;
+    this.moonBeam.shadow.normalBias = 0.16;
     this.scene.add(this.moonGlow, this.moonDisc, this.moonBeam, this.moonBeam.target);
   }
 
@@ -265,8 +304,8 @@ export class Diorama {
       }
       const tone = Math.max(0, diffuse * (1.0 + 0.08 * (1 - r2) + maria + relief));
       const i = (y * n + x) * 4;
-      pixels.data.set([38 + 215 * tone, 44 + 199 * tone, 72 + 146 * tone,
-        (75 + 180 * lit) * THREE.MathUtils.clamp((1 - r2) * n / 4, 0, 1)], i);
+      pixels.data.set([42 + 231 * tone, 45 + 215 * tone, 63 + 172 * tone,
+        (24 + 231 * lit) * THREE.MathUtils.clamp((1 - r2) * n / 4, 0, 1)], i);
     }
     ctx.putImageData(pixels, 0, 0);
     this.moonTexture.needsUpdate = true;
@@ -281,6 +320,7 @@ export class Diorama {
     const il = moon.fraction;
     const sunAlt = (sun.altitude * 180) / Math.PI;
     const t = THREE.MathUtils.smoothstep(sunAlt, -14, 4); // 0 밤 → 1 낮
+    this.nightLights = 1 - THREE.MathUtils.smoothstep(sunAlt, -10, 0);
     const dusk = 1 - Math.abs(t - 0.5) * 2;
     const [b, tp] = [new THREE.Color(), new THREE.Color()];
     if (t < 0.5) {
@@ -306,10 +346,13 @@ export class Diorama {
     this.moonGlow.position.copy(this.moonDisc.position);
     this.moonBeam.position.copy(this.moonDisc.position);
     this.moonBeam.target.position.copy(origin);
+    this.moonBeam.target.position.x += moonDirection.x * this.radius * 0.065;
+    this.moonBeam.target.position.z += moonDirection.z * this.radius * 0.065;
     this.moonGlow.visible = this.moonDisc.visible && t < 0.55;
     this.moonGlow.material.opacity = il * (1 - t);
     const aboveHorizon = THREE.MathUtils.smoothstep(mp.altitude, 0, 0.21);
-    this.moonBeam.intensity = (this.radius * 0.31) ** 2 * 0.92 * il * aboveHorizon * (1 - t) ** 2;
+    this.moonBeam.intensity = (this.radius * 0.31) ** 2 * 1.45 * il * aboveHorizon * (1 - t) ** 2;
+    this.moonBeam.castShadow = this.moonBeam.intensity > 1 && t < 0.35;
 
     // 주 조명: 낮이면 해, 밤이면 달 (달 밝기에 비례)
     const night = t < 0.35;
@@ -320,11 +363,12 @@ export class Diorama {
     this.key.position.copy(shadowCenter).addScaledVector(src, this.radius * 2.5);
     this.key.target.position.copy(shadowCenter);
     this.key.color.set(night ? "#c9d4ff" : dusk > 0.4 ? "#ffc89a" : "#fff1dc");
-    this.key.intensity = night ? (mp.altitude > 0 ? 0.25 + 1.25 * il : 0) : 1.2 + 0.6 * t;
-    this.key.castShadow = !night || mp.altitude > 0;
+    this.key.intensity = night ? 0.34 * il * aboveHorizon : 1.2 + 0.6 * t;
+    this.key.castShadow = !night;
     this.hemi.color.lerpColors(new THREE.Color("#7c7fd0"), new THREE.Color("#e8ecff"), t);
     this.hemi.groundColor.lerpColors(new THREE.Color("#55486b"), new THREE.Color("#8b765f"), t);
-    this.hemi.intensity = 0.67 + 0.48 * t;
+    this.hemi.intensity = 0.53 + 0.62 * t;
+    this.renderer.shadowMap.needsUpdate = true;
     this.lanternOn = 1 - t;
     for (const m of this.markers) m.glow.material.opacity = 0.14 + 0.50 * this.lanternOn;
   }
@@ -426,7 +470,7 @@ export class Diorama {
       if (existing) {
         previous.delete(s.id);
         existing.s = s;
-        existing.badge.textContent = s.score ?? "–";
+        existing.badge.textContent = s.score ?? "✦";
         existing.badge.style.setProperty("--c", scoreHex(s.score));
         return existing;
       }
@@ -437,6 +481,8 @@ export class Diorama {
       glow.position.copy(p).add(new THREE.Vector3(0, 2.4, 0));
       this.scene.add(glow);
       const el = document.createElement("button");
+      el.title = s.name;
+      el.setAttribute("aria-label", s.name);
       const stem = document.createElement("span");
       stem.className = "pin-stem";
       stem.setAttribute("aria-hidden", "true");
@@ -445,7 +491,7 @@ export class Diorama {
       el.setAttribute("aria-controls", this.overlay.dataset.controls || "site-detail");
       el.className = "pin" + (s.primary ? " primary" : "");
       const badge = document.createElement("b");
-      badge.textContent = s.score ?? "–";
+      badge.textContent = s.score ?? "✦";
       badge.style.setProperty("--c", scoreHex(s.score));
       const name = document.createElement("span");
       name.textContent = s.name;
@@ -475,9 +521,15 @@ export class Diorama {
     const v = new THREE.Vector3();
     const localMoon = new THREE.Vector3();
     const caption = this.moon.querySelector("span");
+    let lastFrame;
     const loop = (now = 0) => {
       this.controls.update();
       this.waterTime.value = now * 0.00065;
+      const delta = lastFrame == null ? 1 : Math.min((now - lastFrame) / 1000, 0.25);
+      lastFrame = now;
+      const brightness = this.showCityLights ? this.nightLights * 1.55 : 0;
+      this.cityLightStrength.value = THREE.MathUtils.damp(this.cityLightStrength.value, brightness, 5, delta);
+      this.overlay.classList.toggle("overview", this.camera.position.distanceTo(this.controls.target) > this.radius * 0.57);
       this.renderer.render(this.scene, this.camera);
       const w = this.canvas.clientWidth;
       const h = this.canvas.clientHeight;
@@ -545,12 +597,16 @@ function cloudNoise(x, y) {
     THREE.MathUtils.lerp(at(i, j + 1), at(i + 1, j + 1), u), v);
 }
 
-function radialTexture(inner) {
+function radialTexture(inner, halo = false) {
   const c = document.createElement("canvas");
   c.width = c.height = 128;
   const g = c.getContext("2d");
   const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
   grd.addColorStop(0, inner);
+  if (halo) {
+    grd.addColorStop(0.27, "rgba(255,233,183,0.19)");
+    grd.addColorStop(0.52, "rgba(245,214,177,0.045)");
+  }
   grd.addColorStop(1, "rgba(0,0,0,0)");
   g.fillStyle = grd;
   g.fillRect(0, 0, 128, 128);

@@ -1,8 +1,10 @@
 /* global SunCalc */
+import { cityLightsEnabled, rememberCityLights } from "./city-lights.js";
 import { SITES } from "./sites.js";
 import { altAz, observeTarget, observingTargets } from "./targets.js";
 import { addDays, ymd } from "./score.js";
 import { moonLighting } from "./diorama/moon.js";
+import { constellations } from "./constellations.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("view"), ctx = canvas.getContext("2d");
@@ -18,7 +20,12 @@ const names = {11767: "북극성", 91262: "베가", 69673: "아르크투루스",
   37279: "프로키온", 113368: "포말하우트", 49669: "레굴루스", 65474: "스피카", 37826: "폴룩스"};
 const planets = observingTargets.filter(({ kind, id }) => kind === "행성" && id !== "uranus" && id !== "neptune");
 let azimuth = 180, tilt = 20, focal, width, height, frame, scene, pointer;
-let catalog = [], horizons = {};
+let catalog = [], horizons = {}, cityProfiles = {};
+$("city-view").checked = cityLightsEnabled();
+$("city-view").onchange = () => { rememberCityLights($("city-view").checked); requestDraw(); };
+const FIGURES_KEY = "sky-constellations";
+$("constellations").checked = localStorage.getItem(FIGURES_KEY) !== "off";
+$("constellations").onchange = () => { localStorage.setItem(FIGURES_KEY, $("constellations").checked ? "on" : "off"); requestDraw(); };
 
 $("site").replaceChildren(...SITES.map(({ id, name }) => new Option(name, id)));
 $("site").value = SITES.some(({ id }) => id === params.get("site")) ? params.get("site") : "bohyeon_obs";
@@ -50,9 +57,10 @@ function updateTime() {
   const sunlight = SunCalc.getPosition(time, site.lat, site.lon).altitude / RAD;
   const phase = SunCalc.getMoonIllumination(time);
   const moonPhase = moonLighting(moonPosition, phase);
-  const stars = catalog.map(([id, ra, dec, mag, bv]) => ({ name: names[id], mag, bv, ...altAz(ra / 15, dec, time, site.lat, site.lon) }));
+  const stars = catalog.map(([id, ra, dec, mag, bv]) => ({ id, name: names[id], mag, bv, ...altAz(ra / 15, dec, time, site.lat, site.lon) }));
   const marker = planets.map((planet) => ({ name: planet.name, ...observeTarget(planet, time, site) }));
-  scene = { ridge, moon, moonPhase, phase, sunlight, stars, marker };
+  const byId = new Map(stars.map((star) => [star.id, star]));
+  scene = { cityProfile: cityProfiles[site.id], ridge, moon, moonPhase, phase, sunlight, stars, marker, byId };
   $("site-name").textContent = site.name;
   $("site-elevation").textContent = elevation == null ? site.region : `${site.region} · 해발 약 ${elevation.toLocaleString("ko-KR")}m`;
   $("time").textContent = `${clock.format(time)} KST${ymd(time) !== $("night").value ? " · 다음 날" : ""}`;
@@ -94,7 +102,7 @@ function drawMoon(x, y, radius, light) {
 function draw() {
   frame = undefined;
   if (!scene || !focal) return;
-  const { ridge, moon, moonPhase, phase, sunlight, stars, marker } = scene;
+  const { ridge, moon, moonPhase, phase, sunlight, stars, marker, byId } = scene;
   const sin = Math.sin(tilt * RAD), cos = Math.cos(tilt * RAD);
   const project = (alt, az) => {
     const a = alt * RAD, diff = (az - azimuth) * RAD;
@@ -113,7 +121,48 @@ function draw() {
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, width, height);
 
-  const labels = [];
+  const profile = $("city-view").checked && scene.cityProfile;
+  const cityGlow = (az) => {
+    if (!profile) return 0;
+    const bin = bearings(az) / 10, a = Math.floor(bin);
+    return profile[a] + (profile[(a + 1) % 36] - profile[a]) * (bin - a);
+  };
+  if (profile && night > 0) {
+    for (let az = 0; az < 360; az += 10) {
+      const point = project(0, az);
+      if (!point) continue;
+      const [x, y] = point, radius = 0.36 * focal;
+      if (x < -radius || x > width + radius || y > height + radius) continue;
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      glow.addColorStop(0, `rgba(255,167,94,${0.55 * night * cityGlow(az)})`);
+      glow.addColorStop(1, "rgba(255,167,94,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(x - radius, y - radius, 2 * radius, 2 * radius);
+    }
+  }
+  const labels = [], figureLabels = [];
+  if ($("constellations").checked && night > 0.3) {
+    const seen = (star) => star && star.alt > Math.max(0, ridgeAt(ridge, star.az)) ? project(star.alt, star.az) : null;
+    ctx.strokeStyle = `rgba(176,196,255,${0.34 * night})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const { name, lines } of constellations) {
+      const points = [];
+      for (const [a, b] of lines) {
+        const p = seen(byId.get(a)), q = seen(byId.get(b));
+        if (p) points.push(p);
+        if (!p || !q || Math.hypot(p[0] - q[0], p[1] - q[1]) > Math.max(width, height)) continue;
+        ctx.moveTo(...p); ctx.lineTo(...q);
+      }
+      const inView = points.filter(([x, y]) => x > 0 && x < width && y > 0 && y < height);
+      if (inView.length >= 2) {
+        const cx = inView.reduce((sum, [x]) => sum + x, 0) / inView.length;
+        const cy = Math.max(...inView.map(([, y]) => y));
+        figureLabels.push([name, cx, cy + 18]);
+      }
+    }
+    ctx.stroke();
+  }
   for (const { alt, az, name, mag, bv } of stars) {
     if (night <= 0.15 || alt <= Math.max(0, ridgeAt(ridge, az))) continue;
     const point = project(alt, az);
@@ -122,7 +171,8 @@ function draw() {
     if (x < -4 || x > width + 4 || y < -4 || y > height + 4) continue;
     const warm = Number(bv);
     const bright = clamp((6.4 - mag) / 6, 0.09, 1);
-    const opacity = bright * night * (1 - moonGlow * (mag > 3 ? 0.38 : 0.12)) * clamp(0.46 + alt / 40, 0.46, 1);
+    const localGlow = cityGlow(az) * Math.exp(-Math.max(0, alt) / 16);
+    const opacity = (1 - localGlow * clamp((mag - 1) / 4, 0, 0.85)) * bright * night * (1 - moonGlow * (mag > 3 ? 0.38 : 0.12)) * clamp(0.46 + alt / 40, 0.46, 1);
     ctx.fillStyle = warm > 0.95 ? `rgba(255,219,169,${opacity})` : `rgba(214,231,255,${opacity})`;
     ctx.beginPath(); ctx.arc(x, y, 0.4 + 1.55 * bright, 0, Math.PI * 2); ctx.fill();
     if (name && night > 0.8) labels.push([name, x + 6, y - 7]);
@@ -141,9 +191,26 @@ function draw() {
     drawMoon(...onScreenMoon, r, moonPhase);
     labels.push(["달", onScreenMoon[0] + r + 7, onScreenMoon[1]]);
   }
-  ctx.font = "13px system-ui, sans-serif";
-  ctx.fillStyle = "#eedff0";
-  for (const [label, x, y] of labels) ctx.fillText(label, x, y);
+  const bounds = canvas.getBoundingClientRect();
+  const blocked = [...document.querySelectorAll("header > *, #sky-help, .controls")].map((element) => {
+    const r = element.getBoundingClientRect();
+    return [r.left - bounds.left - 6, r.top - bounds.top - 6, r.right - bounds.left + 6, r.bottom - bounds.top + 6];
+  }).filter(([l, t, r, b]) => r > l && b > t);
+  const placed = [];
+  const place = (list, font, color, center) => {
+    ctx.font = font;
+    ctx.fillStyle = color;
+    for (const [label, x0, y] of list) {
+      const w = ctx.measureText(label).width, x = center ? x0 - w / 2 : x0;
+      const box = [x - 2, y - 13, x + w + 2, y + 4];
+      const hit = (r) => box[0] < r[2] && box[2] > r[0] && box[1] < r[3] && box[3] > r[1];
+      if (blocked.some(hit) || placed.some(hit)) continue;
+      placed.push(box);
+      ctx.fillText(label, x, y);
+    }
+  };
+  place(labels, "13px system-ui, sans-serif", "#eedff0", false);
+  place(figureLabels, "12px system-ui, sans-serif", `rgba(190,205,255,${0.75 * night})`, true);
 
   const silhouettes = [];
   for (let d = -100; d <= 100; d += 1) {
@@ -247,7 +314,9 @@ function loadData(name) {
   });
 }
 
-const [starData, terrainData] = await Promise.allSettled([loadData("stars"), loadData("horizons")]);
+const [starData, terrainData, cityData] = await Promise.allSettled([loadData("stars"), loadData("horizons"), loadData("city-horizons")]);
+if (cityData.status === "fulfilled") cityProfiles = cityData.value;
+else $("city-view").disabled = true;
 if (starData.status === "fulfilled") catalog = starData.value;
 if (terrainData.status === "fulfilled") horizons = terrainData.value;
 updateTime();

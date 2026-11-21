@@ -23,3 +23,12 @@
 #moon span { padding: 3px 8px; border-radius: 999px; background: #292745c4; font-size: 11px; }
 #moon[data-status] { inset: 14px 12px auto auto !important; transform: none; opacity: .72; }
 #moon[hidden], .pin[hidden] { display: none; }
+.city-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11px; margin-top: 6px; }
+.city-legend[hidden] { display: none; }
+.city-legend i { width: 37px; height: 7px; border-radius: 6px; background: linear-gradient(90deg, #59405a, #c27954, #ffdf9d); }
+.city-legend a { color: inherit; text-underline-offset: 2px; }
+#pins.overview .pin:not(.primary) { height: 22px; min-width: 22px; justify-content: center; padding: 0; background: #3d4057; border: 1px solid #f9d9aa; }
+#pins.overview .pin:not(.primary) b { width: 17px; height: 17px; font-size: 10px; }
+#pins.overview .pin:not(.primary) span { display: none; }
+#pins.overview .pin:is(:hover, :focus-visible) { z-index: 2; }
+#pins.overview .pin:not(.primary):is(:hover, :focus-visible) span { display: block; position: absolute; top: -1px; left: calc(100% + 4px); border-radius: 7px; padding: 3px 6px; color: #382d46; background: #fff3dc; }

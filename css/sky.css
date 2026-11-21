@@ -33,3 +33,5 @@ details { margin-top: 6px; color: #d9cbe4; font-size: .75rem; }
 details p { margin-top: 5px; font-size: .75rem; }
 summary { cursor: pointer; width: max-content; }
 @media (max-width: 540px) { #sky-help { top: auto; bottom: 183px; right: 12px; max-width: calc(100% - 24px); } }
+/* 좁은 화면에선 조작판에 가려지므로 화면에서만 숨기고 스크린리더 설명은 유지 */
+@media (max-width: 540px) { #sky-help { clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; padding: 0; } }
