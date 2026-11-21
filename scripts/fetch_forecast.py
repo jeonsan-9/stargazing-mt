@@ -415,19 +415,23 @@ def fetch_climate(site):
     # 1년 중 날짜(월-일)별로 (구름 평균, 비 온 날 여부) 모음
     by_md = {}
     for day, vals in nights.items():
-        if len(vals) < 5 or day not in rains:
+        if len(vals) < 5:
             continue
-        by_md.setdefault(md_of(day), []).append((sum(vals) / len(vals), rains[day] >= RAIN_LIMIT))
+        # 강수 자료가 없는 날은 비 여부를 None으로 두고 구름 통계에는 그대로 씀
+        rain = rains[day] >= RAIN_LIMIT if day in rains else None
+        by_md.setdefault(md_of(day), []).append((sum(vals) / len(vals), rain))
 
     def summarize(pool):
         if not pool:
             return None
         n = len(pool)
+        known = [(c, r) for c, r in pool if r is not None]
+        k = len(known)
         return {
             "clear": round(sum(1 for c, _ in pool if c < CLEAR_LIMIT) / n, 3),
-            "rain": round(sum(1 for _, r in pool if r) / n, 3),
+            "rain": round(sum(1 for _, r in known if r) / k, 3) if k else None,
             # 좋은 밤 = 비 안 오고 밤하늘 맑음
-            "good": round(sum(1 for c, r in pool if c < CLEAR_LIMIT and not r) / n, 3),
+            "good": round(sum(1 for c, r in known if c < CLEAR_LIMIT and not r) / k, 3) if k else None,
             "cloud": round(sum(c for c, _ in pool) / n, 1),
         }
 
