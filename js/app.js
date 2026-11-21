@@ -94,7 +94,7 @@ async function loadDiorama() {
   try {
     const { Diorama } = await import("./diorama/scene.js?v=20261122f");
     const pins = $("pins");
-    diorama = await new Diorama($("scene"), pins, $("moon")).load("models/korea.glb?v=20261122d");
+    diorama = await new Diorama($("scene"), pins, $("moon")).load("models/korea.glb?v=20261122s");
     diorama.calibrateWith([...SITES, DEPARTURE]);
     diorama.setCityLights($("city-view").checked);
     pins.addEventListener("click", (event) => {
