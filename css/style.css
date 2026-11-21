@@ -59,6 +59,7 @@ body.detail-open #detailPanel { display: block; }
 #controls select, #controls button { background: rgba(255, 255, 255, 0.06); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 5px 8px; font: inherit; font-size: 13px; }
 #controls button { margin-left: auto; cursor: pointer; }
+#controls button.play { margin-left: 0; width: 34px; }
 #hour { flex: 1; accent-color: var(--accent); }
 #hourLabel { min-width: 120px; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
 
