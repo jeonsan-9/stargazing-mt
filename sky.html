@@ -7,11 +7,21 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap">
   <link rel="stylesheet" href="css/sky.css?v=20261122g">
   <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#484756" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="징크스 타파기" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="css/pwa.css" />
+  <script type="module" src="js/pwa.js"></script>
 </head>
 <body>
   <canvas id="view" tabindex="0" role="img" aria-label="관측지의 하늘과 산 능선" aria-describedby="sky-help"></canvas>
   <header>
-    <nav aria-label="관측 메뉴"><a id="back" href="./index.html">← 지도로 돌아가기</a><a id="plan" href="./observe.html">관측 계획</a></nav>
+    <nav aria-label="관측 메뉴"><a id="back" href="./index.html">← 지도로 돌아가기</a><a id="plan" href="./observe.html">관측 계획</a><span data-pwa-slot></span></nav>
     <h1 id="site-name">현장 하늘</h1>
     <p id="site-elevation"></p>
     <label class="location">관측지 <select id="site"></select></label>

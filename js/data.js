@@ -6,15 +6,28 @@ import { SITES, GRID, gridAxes } from "./sites.js";
 import { OPEN_METEO_MODELS, GRID_MODELS } from "./models.js";
 
 const OM_URL = "https://api.open-meteo.com/v1/forecast";
+// 3시간마다 갱신되므로 12시간 넘게 그대로면 수집이 멈춘 것으로 봄
+const STALE_MS = 12 * 3600e3;
 
 export async function loadForecast() {
   try {
     const res = await fetch("data/forecast.json", { cache: "no-cache" });
     if (res.ok) {
       const data = await res.json();
-      if (data?.times?.length) {
+      const age = Date.now() - new Date(data?.generated).getTime();
+      if (data?.times?.length && age < STALE_MS) {
         data.source = "precomputed";
         return data;
+      }
+      if (data?.times?.length) {
+        // 자동 수집이 멈춘 경우: 실시간 호출을 먼저 시도하고, 실패하면 오래된 파일이라도 보여줌
+        console.warn("forecast.json이 오래됨, Open-Meteo 직접 호출", data.generated);
+        try {
+          return await loadLive();
+        } catch (e) {
+          data.source = "stale";
+          return data;
+        }
       }
     }
   } catch (e) {

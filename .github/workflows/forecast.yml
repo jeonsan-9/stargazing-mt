@@ -11,6 +11,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write # 아래 keepalive가 이 워크플로를 다시 켜는 데 필요
 
 concurrency:
   group: pages
@@ -20,6 +21,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # 공개 저장소는 60일 동안 커밋이 없으면 GitHub이 예약 실행을 끕니다.
+      # 실행할 때마다 이 워크플로를 '사용'으로 다시 설정해 꺼짐 타이머를 되돌립니다. 실패해도 예보 수집은 계속합니다.
+      - name: 예약 실행 유지 (keepalive)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/forecast.yml/enable"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -32,7 +40,7 @@ jobs:
       - name: 사이트 묶기
         run: |
           mkdir -p _site
-          cp -r index.html diorama.html observe.html sky.html css js data models _site/
+          cp -r index.html diorama.html observe.html sky.html manifest.webmanifest sw.js icons css js data models _site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
