@@ -19,6 +19,7 @@ html, body {
   font-size: 14px; letter-spacing: -0.01em; -webkit-font-smoothing: antialiased;
 }
 #map { position: fixed; inset: 0; }
+#tiltShift { display: none; }
 button, select, input { font: inherit; color: inherit; }
 
 /* ---------- 유리 패널 ---------- */

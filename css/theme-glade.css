@@ -1,0 +1,17 @@
+/* 테마: 아늑한 미니어처 밤 (디오라마) — 지도 쪽 효과. 패널 스타일은 아래에 이어짐 */
+/* 틸트시프트: 화면 위·아래를 흐리게 해서 장난감 모형을 들여다보는 느낌 */
+#tiltShift {
+  display: block; position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  -webkit-backdrop-filter: blur(3.5px) saturate(115%);
+  backdrop-filter: blur(3.5px) saturate(115%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0,0,0,.85) 12%, transparent 34%, transparent 68%, rgba(0,0,0,.8) 88%, #000 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0,0,0,.85) 12%, transparent 34%, transparent 68%, rgba(0,0,0,.8) 88%, #000 100%);
+}
+/* 등불 같은 따뜻한 비네트 */
+#tiltShift::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(120% 80% at 50% 55%, transparent 55%, rgba(40, 30, 70, .45) 100%),
+    radial-gradient(60% 40% at 50% 100%, rgba(255, 180, 120, .10), transparent 70%);
+}
+#map { filter: saturate(1.05) contrast(.96); }

@@ -9,6 +9,27 @@ import { scoreNight, scoreColor, moonInfo, darkWindow, parseLocal, ymd, addDays,
 const EXAG = 3; // 지형 과장 배율 (한반도 산은 낮아서 3배로 키워야 높낮이가 보임)
 const CLOUD_ALT = 2500; // 구름층 고도 (m, 과장 전)
 
+// 지도 색감 테마. ?theme=glade 는 아늑한 미니어처(디오라마) 밤 풍경
+const THEME = document.documentElement.dataset.theme || "cute";
+const GLADE = THEME === "glade";
+const PAL = GLADE
+  ? {
+      land: "#56648a", water: "#34446f", waterway: "#3d4f7c", stateLine: "#8d97c4", countryLine: "#a7afd6", road: "#8a86b0",
+      label: "#fff4e2", labelState: "#d9d2f0", halo: "rgba(52,48,88,0.9)",
+      shadow: "#2b2550", accent: "#6f7fb0", highlight: "#ffe2bd",
+      dark: [92, 92, 150], moonlit: [255, 226, 190], dusk: [255, 180, 150],
+      sky: [58, 66, 118], skyMoon: [96, 104, 160], skyDusk: [240, 170, 150], horizon: [255, 196, 170],
+      cloud: [255, 248, 242], cloudBlur: 16, mask: "#2a2748", maskOpacity: 0.55,
+    }
+  : {
+      land: "#0b1124", water: "#04060f", waterway: "#0a1022", stateLine: "#2c3a66", countryLine: "#3a4a80", road: "#26315a",
+      label: "#9fabcf", labelState: "#5d6a90", halo: "rgba(6,9,20,0.85)",
+      shadow: "#000000", accent: "#1b2440", highlight: "#b8c8f0",
+      dark: [26, 32, 54], moonlit: [120, 136, 186], dusk: [255, 190, 150],
+      sky: [11, 16, 32], skyMoon: [40, 52, 88], skyDusk: [70, 60, 90], horizon: [120, 130, 170],
+      cloud: [235, 240, 250], cloudBlur: 10, mask: "#04060d", maskOpacity: 0.78,
+    };
+
 const state = {
   data: null,
   night: null, // YYYY-MM-DD (저녁 날짜)
@@ -70,8 +91,8 @@ function styleBasemap() {
       }
       map.setLayoutProperty(id, "text-field", ["coalesce", ["get", "name:ko"], ["get", "name"]]);
       map.setLayoutProperty(id, "text-letter-spacing", 0.08);
-      map.setPaintProperty(id, "text-color", id === "place_state" ? "#5d6a90" : "#9fabcf");
-      map.setPaintProperty(id, "text-halo-color", "rgba(6,9,20,0.85)");
+      map.setPaintProperty(id, "text-color", id === "place_state" ? PAL.labelState : PAL.label);
+      map.setPaintProperty(id, "text-halo-color", PAL.halo);
       map.setPaintProperty(id, "text-halo-width", 1.4);
       continue;
     }
@@ -79,16 +100,16 @@ function styleBasemap() {
       map.setLayoutProperty(id, "visibility", "none");
       continue;
     }
-    if (id === "background") map.setPaintProperty(id, "background-color", "#0b1124");
-    else if (id === "water") map.setPaintProperty(id, "fill-color", "#04060f");
-    else if (id === "waterway") map.setPaintProperty(id, "line-color", "#0a1022");
+    if (id === "background") map.setPaintProperty(id, "background-color", PAL.land);
+    else if (id === "water") map.setPaintProperty(id, "fill-color", PAL.water);
+    else if (id === "waterway") map.setPaintProperty(id, "line-color", PAL.waterway);
     else if (id === "landcover" || id === "landuse" || id === "park_national_park") map.setPaintProperty(id, "fill-opacity", 0.0);
     else if (id.startsWith("boundary_state")) {
-      map.setPaintProperty(id, "line-color", "#2c3a66");
+      map.setPaintProperty(id, "line-color", PAL.stateLine);
       map.setPaintProperty(id, "line-opacity", 0.7);
-    } else if (id.startsWith("boundary_country")) map.setPaintProperty(id, "line-color", "#3a4a80");
+    } else if (id.startsWith("boundary_country")) map.setPaintProperty(id, "line-color", PAL.countryLine);
     else if (/^(road|bridge)_(mot|trunk)/.test(id)) {
-      map.setPaintProperty(id, "line-color", id.includes("case") ? "rgba(0,0,0,0)" : "#26315a");
+      map.setPaintProperty(id, "line-color", id.includes("case") ? "rgba(0,0,0,0)" : PAL.road);
       map.setPaintProperty(id, "line-opacity", 0.55);
     }
   }
@@ -119,9 +140,9 @@ map.on("load", () => {
       source: "dem-hs",
       paint: {
         "hillshade-exaggeration": 1,
-        "hillshade-shadow-color": "#000000",
-        "hillshade-highlight-color": "#b8c8f0",
-        "hillshade-accent-color": "#1b2440",
+        "hillshade-shadow-color": PAL.shadow,
+        "hillshade-highlight-color": PAL.highlight,
+        "hillshade-accent-color": PAL.accent,
         "hillshade-illumination-direction": 315,
       },
     },
@@ -244,9 +265,7 @@ function cloudImageAt(hourIdx) {
     for (let c = 0; c < nLon; c++) {
       const v = field[r * nLon + c];
       const p = (r * nLon + c) * 4;
-      img.data[p] = 235;
-      img.data[p + 1] = 240;
-      img.data[p + 2] = 250;
+      [img.data[p], img.data[p + 1], img.data[p + 2]] = PAL.cloud;
       img.data[p + 3] = v == null ? 0 : Math.round(Math.pow(v / 100, 1.3) * 235);
     }
   }
@@ -257,7 +276,7 @@ function cloudImageAt(hourIdx) {
   const big = cloudCanvas.getContext("2d");
   big.imageSmoothingEnabled = true;
   big.imageSmoothingQuality = "high";
-  big.filter = "blur(10px)";
+  big.filter = `blur(${PAL.cloudBlur}px)`;
   big.drawImage(small, 0, 0, cloudCanvas.width, cloudCanvas.height);
   big.filter = "none";
   // 구름 질감: 미리 만든 잡음으로 가장자리를 뭉게뭉게하게
@@ -319,7 +338,7 @@ function addKoreaMask() {
     },
   });
   // 라벨보다 위에 올려 일본·중국·북한 지명도 함께 흐리게
-  map.addLayer({ id: "korea-mask", type: "fill", source: "korea-mask", paint: { "fill-color": "#04060d", "fill-opacity": 0.78, "fill-antialias": false } });
+  map.addLayer({ id: "korea-mask", type: "fill", source: "korea-mask", paint: { "fill-color": PAL.mask, "fill-opacity": PAL.maskOpacity, "fill-antialias": false } });
 }
 
 // ---------- 하늘의 달 ----------
@@ -400,24 +419,21 @@ function updateLighting() {
   const moonLight = moonAlt > 0 ? ill * Math.min(1, (moonAlt + 2) / 30) : 0;
   const twilight = sunAlt > -18 ? Math.min(1, (sunAlt + 18) / 18) : 0;
 
-  const dark = [26, 32, 54];
-  const moonlit = [120, 136, 186];
-  const dusk = [255, 190, 150];
+  const { dark, moonlit, dusk } = PAL;
   let hi = mix(dark, moonlit, moonLight);
   if (twilight > 0) hi = mix(hi, dusk, twilight * 0.6);
   map.setPaintProperty("hillshade", "hillshade-highlight-color", rgb(hi));
-  map.setPaintProperty("hillshade", "hillshade-exaggeration", 0.4 + 0.3 * Math.max(moonLight, twilight));
+  map.setPaintProperty("hillshade", "hillshade-exaggeration", (GLADE ? 0.55 : 0.4) + 0.3 * Math.max(moonLight, twilight));
   map.setPaintProperty("hillshade", "hillshade-illumination-anchor", "map");
   map.setPaintProperty(
     "hillshade",
     "hillshade-illumination-direction",
     moonLight > 0.02 ? az : ((sp.azimuth * 180) / Math.PI + 180 + 360) % 360
   );
-  const skyBase = [11, 16, 32];
-  const sky = mix(mix(skyBase, [40, 52, 88], moonLight), [70, 60, 90], twilight * 0.7);
+  const sky = mix(mix(PAL.sky, PAL.skyMoon, moonLight), PAL.skyDusk, twilight * 0.7);
   map.setSky({
     "sky-color": rgb(sky),
-    "horizon-color": rgb(mix(sky, [120, 130, 170], 0.35 + 0.3 * moonLight)),
+    "horizon-color": rgb(mix(sky, PAL.horizon, 0.35 + 0.3 * moonLight)),
     "fog-color": rgb(sky),
     "sky-horizon-blend": 0.6,
     "horizon-fog-blend": 0.6,
@@ -465,7 +481,38 @@ function renderLayers() {
     });
   }
 
-  layers.push(
+  if (GLADE) {
+    // 디오라마: 막대 대신 등불처럼 빛나는 동그란 표시
+    const z = (r) => siteZ(r) + (state.is3D ? 120 * EXAG : 0);
+    layers.push(
+      new deck.ScatterplotLayer({
+        id: "site-glow",
+        data: visible,
+        getPosition: (r) => [r.site.lon, r.site.lat, z(r)],
+        getRadius: (r) => (r.site.primary ? 4200 : 3000),
+        radiusMinPixels: 14,
+        getFillColor: [255, 200, 130, 46],
+        stroked: false,
+        parameters: { depthTest: false },
+        updateTriggers: { getPosition: [state.is3D] },
+      }),
+      new deck.ScatterplotLayer({
+        id: "sites",
+        data: visible,
+        pickable: true,
+        getPosition: (r) => [r.site.lon, r.site.lat, z(r)],
+        getRadius: (r) => (r.site.primary ? 1500 : 1100),
+        radiusMinPixels: 6,
+        getFillColor: (r) => scoreColor(r.score, 255),
+        getLineColor: [255, 246, 226, 255],
+        stroked: true,
+        lineWidthMinPixels: 2.5,
+        parameters: { depthTest: false },
+        onClick: ({ object }) => object && selectSite(object.site.id, true),
+        updateTriggers: { getPosition: [state.is3D], getFillColor: [state.night] },
+      })
+    );
+  } else layers.push(
     new deck.ColumnLayer({
       id: "sites",
       data: visible,
@@ -514,15 +561,19 @@ function renderLayers() {
       getPosition: (r) =>
         r.departure
           ? [r.site.lon, r.site.lat, state.is3D ? 40 * EXAG : 0]
-          : [r.site.lon, r.site.lat, siteZ(r) + (state.is3D ? 300 + (r.score ?? 0) * 60 : 0)],
+          : [r.site.lon, r.site.lat, siteZ(r) + (state.is3D ? (GLADE ? 120 * EXAG : 300 + (r.score ?? 0) * 60) : 0)],
       getText: (r) => (r.departure ? "출발 · 계명대" : `${r.site.name} ${r.score ?? "-"}`),
       getSize: (r) => (r.site.primary || r.departure ? 14 : 12),
-      getColor: (r) => (r.departure ? [150, 200, 255, 255] : r.site.primary ? [255, 255, 255, 255] : [200, 205, 215, 230]),
+      getColor: (r) =>
+        GLADE
+          ? r.departure ? [90, 80, 140, 255] : [62, 52, 96, 255]
+          : r.departure ? [150, 200, 255, 255] : r.site.primary ? [255, 255, 255, 255] : [200, 205, 215, 230],
       // 가까이 붙은 보현산 두 곳 이름이 겹치지 않게 하나는 아래로
-      getPixelOffset: (r) => (r.site.id === "bohyeon_sci" ? [0, 14] : [0, -14]),
+      getPixelOffset: (r) => (r.site.id === "bohyeon_sci" ? [0, GLADE ? 22 : 14] : [0, GLADE ? -22 : -14]),
       background: true,
-      getBackgroundColor: [10, 14, 25, 190],
-      backgroundPadding: [5, 3],
+      getBackgroundColor: GLADE ? [255, 244, 226, 235] : [10, 14, 25, 190],
+      backgroundPadding: GLADE ? [8, 4] : [5, 3],
+      ...(GLADE ? { getBorderColor: [255, 255, 255, 255], getBorderWidth: 0 } : {}),
       parameters: { depthTest: false },
       updateTriggers: { getPosition: [state.is3D, state.night], getText: [state.night] },
     })
