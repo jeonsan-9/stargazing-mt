@@ -133,7 +133,7 @@ export function renderMonth(box, data, site, ym, todayYmd, onPick, onMove) {
     const [r, g, b] = scoreColor(n.kind === "통계" ? n.score * 1.6 : n.score);
     cells += `<button class="cal${past ? " past" : ""}${n.kind === "예보" ? " fc" : ""}${ds === todayYmd ? " today" : ""}" data-ymd="${ds}"
       title="${m}/${d} 밤 · ${n.score}점 (${n.kind})" style="--c:rgba(${r},${g},${b},.9)">
-      <span class="cd">${d}</span>${moonIcon(n.moon.phase, 12)}<span class="cs">${n.score ?? ""}</span></button>`;
+      <span class="cd">${d}</span>${moonIcon(n.moon.phase, 12)}<span class="cs">${n.score ?? ""}${n.kind === "통계" ? "<small>%</small>" : ""}</span></button>`;
   }
   const mm = data.climate?.by_month?.[m - 1];
   box.innerHTML = `
