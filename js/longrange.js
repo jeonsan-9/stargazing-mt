@@ -84,8 +84,8 @@ export function semesters(todayYmd) {
 }
 
 function odds(good) {
-  if (good >= 0.45) return ["높음", "hi"];
-  if (good >= 0.3) return ["보통", "mid"];
+  if (good >= 0.42) return ["높음", "hi"];
+  if (good >= 0.28) return ["보통", "mid"];
   return ["낮음", "lo"];
 }
 
