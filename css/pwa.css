@@ -1,0 +1,96 @@
+/* 빨간 야간 모드와 앱 설치 버튼 (모든 페이지 공통) */
+
+/* 화면 전체를 빨간색만 남게 곱함: 흰색→빨강, 파랑·초록→검정. 눈의 암적응을 지킴 */
+#nightVeil {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  /* 어두운 빨강: 밝은 패널도 눈부시지 않게 */
+  background: #7a0000;
+  mix-blend-mode: multiply;
+  display: none;
+}
+html.night-red #nightVeil { display: block; }
+html.night-red { background: #000; color-scheme: dark; }
+
+#pwaBar {
+  position: fixed;
+  left: max(10px, env(safe-area-inset-left));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 2147483001;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font: 600 12px/1 "Pretendard Variable", "Gowun Dodum", system-ui, sans-serif;
+  pointer-events: none;
+}
+#pwaBar > * { pointer-events: auto; }
+#pwaBar.inline {
+  position: static;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 4px;
+  pointer-events: auto;
+}
+#pwaBar.inline button { min-height: 28px; padding: 0 9px; box-shadow: none; }
+#pwaBar.inline #netBadge { padding: 6px 8px; }
+#pwaBar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid #a49a85;
+  border-radius: 999px;
+  background: #fff8e9;
+  color: #393634;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 2px 0 #bcb09a;
+}
+#pwaBar button:focus-visible { outline: 2px solid #48674f; outline-offset: 2px; }
+#pwaBar .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d33;
+  box-shadow: 0 0 0 2px #fff8e9, 0 0 0 3px #d33;
+}
+#pwaBar button[aria-pressed="true"] { background: #2a0000; color: #ff6b6b; border-color: #ff6b6b; box-shadow: none; }
+#netBadge {
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: #393634;
+  color: #fff8e9;
+}
+
+#iosTip {
+  position: fixed;
+  left: 50%;
+  bottom: max(56px, calc(env(safe-area-inset-bottom) + 50px));
+  transform: translateX(-50%);
+  z-index: 2147483002;
+  width: min(320px, calc(100vw - 32px));
+  padding: 14px 16px 12px;
+  border-radius: 18px;
+  background: #fff8e9;
+  color: #393634;
+  border: 1px solid #a49a85;
+  font: 14px/1.55 "Pretendard Variable", system-ui, sans-serif;
+  box-shadow: 0 8px 30px #0005;
+}
+#iosTip .share { padding: 1px 6px; border-radius: 6px; background: #dce7d4; }
+#iosTip small { display: block; margin-top: 6px; color: #59554f; }
+#iosTip button {
+  display: block;
+  margin: 10px 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #a49a85;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+@media print { #pwaBar, #nightVeil, #iosTip { display: none !important; } }

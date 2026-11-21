@@ -50,12 +50,22 @@
     #night-sky li { padding: 2px 0; }
     @media (max-width: 600px) { #site-detail { max-height: calc(100% - 266px); } }
   </style>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#484756" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="징크스 타파기" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="css/pwa.css" />
+  <script type="module" src="js/pwa.js"></script>
 </head>
 <body>
   <canvas id="scene"></canvas>
   <div id="moon" hidden><canvas width="144" height="144" role="img" aria-label="달의 위상"></canvas><span></span></div>
   <div id="pins"></div>
-  <header><h1>AAA 징크스 타파기</h1><small>계명대학교 천체관측 동아리</small><br><a href="./index.html">← 예보 지도</a> · <a id="observe-link" href="./observe.html">관측 계획</a></header>
+  <header><h1>AAA 징크스 타파기</h1><small>계명대학교 천체관측 동아리</small><br><a href="./index.html">← 예보 지도</a> · <a id="observe-link" href="./observe.html">관측 계획</a> <span data-pwa-slot></span></header>
   <aside id="site-detail" aria-labelledby="site-title" hidden>
     <div class="title"><h2 id="site-title" tabindex="-1"></h2><button id="close-site" type="button">닫기</button></div>
     <p id="site-summary"></p>

@@ -40,7 +40,7 @@ jobs:
       - name: 사이트 묶기
         run: |
           mkdir -p _site
-          cp -r index.html diorama.html observe.html sky.html css js data models _site/
+          cp -r index.html diorama.html observe.html sky.html manifest.webmanifest sw.js icons css js data models _site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
