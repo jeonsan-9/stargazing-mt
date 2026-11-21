@@ -582,7 +582,14 @@ function hourTable(r) {
     })
     .join("");
   const darkCells = hrs
-    .map((h) => cell("", "dk", `background:rgba(10,14,30,${(1 - h.f.dark * 0.9).toFixed(2)});`, `태양 고도 ${Math.round(h.sunAlt)}°`))
+    .map((h) =>
+      cell(
+        "",
+        "dk",
+        h.f.dark >= 1 ? "background:#24336e" : h.f.dark > 0 ? "background:linear-gradient(90deg,#6b4a6e,#24336e)" : "background:#a0663e",
+        h.f.dark >= 1 ? "완전히 어두움" : h.f.dark > 0 ? `박명 (태양 ${Math.round(h.sunAlt)}°)` : "해가 있음"
+      )
+    )
     .join("");
   const moonCells = hrs
     .map((h) =>
