@@ -360,3 +360,36 @@ table.hourly, #detail h3 .score { font-family: "Pretendard Variable", system-ui,
 @media (prefers-reduced-motion: reduce) {
   .brand .mascot, .brand .club::before, #panel h2::after, #detail h4::after { animation: none; }
 }
+
+/* ---------- fable 5.1 시안에서 고른 장식 ---------- */
+#panel h1 { font-family: "Jua", var(--aaa-hand); font-weight: 400; letter-spacing: 0; text-shadow: 2px 2px 0 rgba(207,191,255,.55), 0 0 14px rgba(255,230,168,.25); }
+#panel, #detailPanel, #controls {
+  outline: 1.5px dashed rgba(207, 191, 255, .22); outline-offset: -7px;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,.55) 0 1px, transparent 1.9px) 0 0 / 150px 140px,
+    radial-gradient(circle at 70% 60%, rgba(255,230,168,.55) 0 1.1px, transparent 2px) 30px 20px / 210px 170px,
+    radial-gradient(circle at 45% 85%, rgba(182,235,217,.5) 0 .9px, transparent 1.7px) 60px 0 / 180px 220px,
+    linear-gradient(145deg, rgba(56, 49, 75, .94), rgba(25, 24, 44, .93) 62%);
+}
+.night:nth-child(odd) { rotate: -1.6deg; }
+.night:nth-child(even) { rotate: 1.4deg; }
+.night:hover, .night.active { rotate: 0deg; }
+.ns { position: relative; }
+.night.active .ns::after { content: "✦"; position: absolute; top: -9px; right: -6px; font-size: 10px; color: #fff; text-shadow: 0 0 5px var(--accent-2); }
+#closeDetail { background: #ffb3b3; color: #3c1f2b; font-weight: 800; border: 2px solid #fff; box-shadow: 2px 2px 0 rgba(207,191,255,.3); }
+.kv { border-bottom: 1.5px dashed var(--line-strong); }
+#detail h3 { position: relative; }
+#detail h3::after { content: "✦ ✧"; position: absolute; right: 44px; top: -8px; font-size: 12px; letter-spacing: 4px; color: var(--accent-2); pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  #detail h3::after { animation: aaa-twinkle 2.6s ease-in-out infinite; }
+  .night { transition: rotate .18s, background .16s, border-color .16s; }
+}
+
+/* 이번 주말 한 줄 결론 */
+.verdict { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 10px; padding: 10px 12px; cursor: pointer;
+  border: 2px solid var(--aaa-edge); border-radius: 16px 13px 15px 12px; box-shadow: 2px 3px 0 #120f20; }
+.verdict b { font-family: var(--aaa-hand); font-size: 21px; font-weight: 700; color: var(--aaa-ink); }
+.verdict small { font-size: 11.5px; color: #3a3350; }
+.verdict.go { background: #b6ebd9; }
+.verdict.maybe { background: #ffe6a8; }
+.verdict.no { background: #ffc2c2; }

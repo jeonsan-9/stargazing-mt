@@ -557,7 +557,32 @@ function recompute() {
 
 // ---------- 화면 ----------
 
+// 이번 주 금·토 밤 중 보현산 점수가 더 좋은 밤으로 한 줄 결론
+function renderVerdict() {
+  const box = $("verdict");
+  if (!box) return;
+  const site = SITES.find((s) => s.id === "bohyeon_obs");
+  const cands = nightsAvailable()
+    .filter((n) => [5, 6].includes(new Date(`${n}T12:00:00+09:00`).getDay()))
+    .map((n) => ({ n, r: scoreNight(state.data, site, n) }))
+    .filter((x) => x.r?.score != null);
+  if (!cands.length) {
+    box.innerHTML = "";
+    return;
+  }
+  const { n, r } = cands.reduce((a, b) => (b.r.score > a.r.score ? b : a));
+  const d = new Date(`${n}T12:00:00+09:00`);
+  const win = r.hours.filter((h) => h.t >= r.windowStart && h.t < r.windowEnd);
+  const rain = Math.max(0, ...win.map((h) => h.precip ?? 0));
+  const [word, cls] = r.score >= 70 ? ["가자!", "go"] : r.score >= 45 ? ["애매해요", "maybe"] : ["접자", "no"];
+  box.className = `verdict ${cls}`;
+  box.innerHTML = `<b>이번 주말 보현산: ${word}</b>
+    <small>${WD[d.getDay()]}요일 밤 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 구름 ${r.cloud}%${rain >= 0.1 ? ` · 비 ${rain.toFixed(1)}mm` : ""} · ${r.score}점 · 모델 일치 ${r.agreement}</small>`;
+  box.onclick = () => setNight(n);
+}
+
 function renderNights() {
+  renderVerdict();
   const box = $("nights");
   box.innerHTML = "";
   for (const n of nightsAvailable()) {

@@ -68,7 +68,7 @@ function dateOf(ymdStr) {
 
 // 예보는 점수, 통계는 "좋은 밤일 확률 %"로 구분해서 보여줌
 function badge(score, kind = "예보") {
-  const shown = kind === "통계" ? Math.min(100, score * 1.8) : score; // 색 기준만 맞춤
+  const shown = score == null ? null : kind === "통계" ? Math.min(100, score * 1.8) : score; // 색 기준만 맞춤
   const [r, g, b] = scoreColor(shown);
   const txt = score == null ? "-" : kind === "통계" ? `${score}%` : score;
   return `<span class="ns${kind === "통계" ? " stat" : ""}" style="background:rgba(${r},${g},${b},.95)">${txt}</span>`;
@@ -90,6 +90,7 @@ function odds(good) {
 }
 
 let retroHTML = null;
+let retroJob = null;
 
 export function renderSemester(box, data, site, todayYmd, onPick) {
   const html = semesters(todayYmd)
@@ -104,7 +105,13 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
         }
       }
       if (!nights.length) return "";
-      const top = nights.filter((n) => !n.blocked).sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5);
+      // 같은 주말의 금·토는 더 좋은 밤 하나만
+      const byWeekend = new Map();
+      for (const n of nights.filter((x) => !x.blocked)) {
+        const key = dateOf(n.ymd).getUTCDay() === 6 ? addDays(n.ymd, -1) : n.ymd;
+        if (!byWeekend.has(key) || (n.score ?? -1) > (byWeekend.get(key).score ?? -1)) byWeekend.set(key, n);
+      }
+      const top = [...byWeekend.values()].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5);
       const strip = nights
         .map((n) => {
           const [r, g, b] = scoreColor(n.score * 1.8);
@@ -120,7 +127,7 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
           const d = dateOf(n.ymd);
           const good = n.good ?? n.clear ?? 0;
           const [o, oc] = odds(good);
-          const why = `${n.rain != null ? `비 올 확률 ${Math.round(n.rain * 100)}% · ` : ""}10년 중 약 ${Math.round(good * 10)}번 맑고 비 없음 · 달 없는 시간 ${Math.round(n.dark * 100)}%`;
+          const why = `${n.rain != null ? `비 올 확률 ${Math.round(n.rain * 100)}% · ` : ""}이 시기(±1주) 맑고 비 없던 밤 ${Math.round(good * 100)}% · 달 없는 시간 ${Math.round(n.dark * 100)}%`;
           return `<button class="pick" data-ymd="${n.ymd}">
             <span class="rank">${k + 1}</span>
             <span class="pd"><b>${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WD[d.getUTCDay()]}) 밤 <i class="odds ${oc}">성공 확률 ${o}</i></b><small>${why}</small></span>
@@ -143,9 +150,14 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
     `<section class="sem"><h3>지난 MT 돌아보기</h3><div id="retroBox">${retroHTML ?? ""}</div></section>` +
     note(data);
   box.querySelectorAll("[data-ymd]").forEach((el) => (el.onclick = () => onPick(el.dataset.ymd)));
-  if (retroHTML == null) {
-    const rb = box.querySelector("#retroBox");
-    renderRetro(rb, site).then(() => (retroHTML = rb.innerHTML));
+  if (retroHTML == null && !retroJob) {
+    // 한 번만 불러오고, 그 사이 화면이 다시 그려져도 지금 있는 상자에 넣음
+    const tmp = document.createElement("div");
+    retroJob = renderRetro(tmp, site).then(() => {
+      retroHTML = tmp.innerHTML;
+      const rb = document.getElementById("retroBox");
+      if (rb) rb.innerHTML = retroHTML;
+    });
   }
 }
 
