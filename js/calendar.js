@@ -33,7 +33,7 @@ function guess(year, half) {
   const start = half === 1 ? `${year}-03-02` : `${year}-09-01`;
   // 개강 주 월요일
   const wd = new Date(`${start}T12:00:00Z`).getUTCDay();
-  const mon = shift(start, wd === 0 ? 1 : 1 - wd);
+  const mon = shift(start, wd === 0 ? 1 : wd === 6 ? 2 : 1 - wd);
   return {
     start,
     end: shift(mon, 15 * 7 + 5),

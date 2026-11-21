@@ -40,7 +40,7 @@ function judge(H, idx, ymd, lat, lon) {
     const il = SunCalc.getMoonIllumination(t).fraction;
     const c = H.cloud_cover[i];
     const d = factor.dark(sun);
-    if (d > 0 && c != null) hs.push(100 * d * factor.cloud(c) * factor.moon(ma, il) * factor.rh(H.relative_humidity_2m[i]));
+    if (d > 0 && c != null) hs.push(100 * d * factor.cloud(c) * factor.moon(ma, il) * factor.rh(H.relative_humidity_2m[i]) * factor.precip(H.precipitation[i]));
     if (h >= 9 && h <= 15 && c != null) clouds.push(c);
   }
   if (!any || hs.length < 3) return null;
@@ -63,8 +63,8 @@ const md = (ymd) => {
 
 export async function renderRetro(box, site) {
   box.innerHTML = `<p class="hint">지난 MT 날씨를 불러오는 중…</p>`;
-  const rows = [];
-  for (const mt of PAST_MTS) {
+  // 세 학기를 동시에 불러옴
+  const rows = await Promise.all(PAST_MTS.map(async (mt) => {
     const [y, m] = mt.ymd.split("-").map(Number);
     const sem = academic(y, m <= 8 ? 1 : 2);
     // 재분석 자료는 며칠 늦게 올라오므로 사흘 전까지만
@@ -85,11 +85,11 @@ export async function renderRetro(box, site) {
       }
       const me = nights.find((n) => n.ymd === mt.ymd);
       const ranked = [...nights].sort((a, b) => b.score - a.score);
-      rows.push({ mt, me, rank: me ? ranked.indexOf(me) + 1 : null, n: nights.length, best: ranked.slice(0, 2) });
+      return { mt, me, rank: me ? ranked.indexOf(me) + 1 : null, n: nights.length, best: ranked.slice(0, 2) };
     } catch (e) {
-      rows.push({ mt, err: String(e) });
+      return { mt, err: String(e) };
     }
-  }
+  }));
   box.innerHTML = rows
     .map((r) => {
       if (r.err || !r.me) return `<div class="retro"><b>${r.mt.sem} · ${md(r.mt.ymd)}</b><small>기록을 불러오지 못했어요</small></div>`;

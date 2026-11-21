@@ -5,6 +5,7 @@
 
 /* global SunCalc */
 import { addDays, darkWindow } from "./score.js";
+import { MESSIER } from "./messier.js";
 
 const RAD = Math.PI / 180;
 const DEG = 180 / Math.PI;
@@ -123,10 +124,10 @@ const SHOWERS = [
   ["작은곰자리 유성우", 12, 22, 1, 10, 14.47, 75.5],
 ];
 
-const ICON = { 행성: "🪐", 성단: "✨", 구상성단: "🔆", 성운: "🌫️", 행성상성운: "💫", 은하: "🌀", 이중성: "⭐", 은하수: "🌌", 유성우: "☄️", 달: "🌙" };
+const ICON = { 행성: "🪐", 성단: "✨", 구상성단: "🔆", 성운: "🌫️", 행성상성운: "💫", 은하: "🌀", 이중성: "⭐", 은하수: "🌌", 유성우: "☄️", 달: "🌙", 별무리: "⭐" };
 
 // ---------- 좌표 변환 ----------
-function altAz(raH, decD, date, lat, lon) {
+export function altAz(raH, decD, date, lat, lon) {
   const d = julian(date) - 2451545;
   const lst = (((280.46061837 + 360.98564736629 * d + lon) % 360) + 360) % 360;
   const H = (lst - raH * 15) * RAD;
@@ -139,9 +140,105 @@ function altAz(raH, decD, date, lat, lon) {
 }
 
 function sep(a1, d1, a2, d2) {
-  // 지평 좌표 사이 각거리 (도)
+  // 각거리 (도). a = 경도 성분(방위각), d = 위도 성분(고도)
   const c = Math.sin(d1 * RAD) * Math.sin(d2 * RAD) + Math.cos(d1 * RAD) * Math.cos(d2 * RAD) * Math.cos((a1 - a2) * RAD);
   return Math.acos(Math.max(-1, Math.min(1, c))) * DEG;
+}
+
+// Representative NGC IDs and major/minor axes (arcmin) from OpenNGC, Mattia Verga,
+// https://github.com/mattiaverga/OpenNGC (CC BY-SA 4.0). Equal axes are used for
+// clusters with a single catalog diameter. Pairs without a combined size stay unset.
+const DSOSIZES = {
+  M1: ["NGC 1952", 8, 4], M3: ["NGC 5272", 16.2, 16.2], M5: ["NGC 5904", 15, 15],
+  M8: ["NGC 6523", 45, 30], M11: ["NGC 6705", 9, 9], M13: ["NGC 6205", 16.5, 16.5],
+  M15: ["NGC 7078", 11.1, 11.1], M17: ["NGC 6618", 12.6], M22: ["NGC 6656", 12.6, 12.6],
+  M27: ["NGC 6853", 6.7], M31: ["NGC 224", 177.83, 69.66], M33: ["NGC 598", 62.09, 36.73],
+  M35: ["NGC 2168", 24, 24], M37: ["NGC 2099", 11.4, 11.4], M42: ["NGC 1976", 90, 60],
+  M44: ["NGC 2632", 108.6, 108.6], M51: ["NGC 5194", 13.71, 11.67], M57: ["NGC 6720", 1.27],
+  M92: ["NGC 6341", 14.4, 14.4], M104: ["NGC 4594", 8.45, 4.91],
+  "NGC 7000": ["", 120, 30], "NGC 457": ["", 7.8, 7.8],
+};
+
+// Equatorial radii in km, NASA Planetary Fact Sheets.
+const PLANET_RADII = { mercury: 2440.5, venus: 6051.8, mars: 3396.2, jupiter: 71492,
+  saturn: 60268, uranus: 25559, neptune: 24764 };
+
+export const observingTargets = [
+  { id: "moon", name: "달", kind: "달", aliases: ["Moon"] },
+  ...PLANETS.map(({ id, name }) => ({ id, name, kind: "행성", aliases: [id] })),
+  { id: "M81", name: "보데 은하", ra: 9.92588, dec: 69.06531, kind: "은하", aliases: ["M81", "NGC 3031"], size: [21.63, 11.25] },
+  { id: "M82", name: "시가 은하", ra: 9.93131, dec: 69.67939, kind: "은하", aliases: ["M82", "NGC 3034"], size: [10.99, 5.11] },
+  { id: "NGC 869", name: "페르세우스 h 성단", ra: 2.31627, dec: 57.11725, kind: "성단", aliases: ["NGC 869"], size: [14.4, 14.4] },
+  { id: "NGC 884", name: "페르세우스 χ 성단", ra: 2.37558, dec: 57.14411, kind: "성단", aliases: ["NGC 884"], size: [10.5, 10.5] },
+  ...DSO.map(([id, name, ra, dec, , kind]) => {
+    const [ngc, major, minor] = DSOSIZES[id] ?? [];
+    const aliases = [id, ngc].filter(Boolean);
+    return { id, name, ra, dec, kind, aliases, size: major && minor ? [major, minor] : null };
+  }),
+];
+// 위 대표 대상에 없는 메시에 천체를 채워 110개 모두 검색되게 한다.
+{
+  const known = new Set(observingTargets.flatMap(({ aliases }) => aliases.map(catalogKey)));
+  for (const [number, ra, dec, mag, kind, ngc, size, name] of MESSIER) {
+    const id = `M${number}`;
+    if (known.has(catalogKey(id))) continue;
+    observingTargets.push({ id, name: name || kind, ra, dec, mag, kind, aliases: [id, ngc].filter(Boolean), size });
+  }
+}
+
+function catalogKey(value) {
+  return value.normalize("NFKC").toLowerCase().replace(/\s+/g, "")
+    .replace(/^messier/, "m").replace(/^(m|ngc|ic)0+(?=\d)/, "$1");
+}
+
+// "5h35m17s -5°23′", "5:35:17 -5:23:28", "83.82 -5.39"(도), "5.59 -5.39"(시) 형식의 적경·적위
+function sexagesimal(text) {
+  const sign = /^\s*-/.test(text) ? -1 : 1;
+  const parts = text.replace(/^[\s+-]+/, "").split(/[hHdD°:'′"″ms\s]+/).filter(Boolean).map(Number);
+  if (!parts.length || parts.length > 3 || parts.some((n) => !Number.isFinite(n))) return null;
+  return sign * (parts[0] + (parts[1] ?? 0) / 60 + (parts[2] ?? 0) / 3600);
+}
+
+export function parseCoordinates(query) {
+  const text = query.normalize("NFKC").trim().replace(/^(ra|적경)\s*/i, "").replace(/(dec|적위)\s*/i, "");
+  const match = text.match(/^([0-9.]+(?:[hH:\s][0-9.]+(?:[mM:'′\s][0-9.]+s?)?)?[hH]?)\s*[, ]\s*([+-]?\s*[0-9.]+(?:[dD°:\s][0-9.]+(?:['′:\s][0-9.]+["″′]{0,2})?)?['′°dD]?)$/);
+  if (!match) return null;
+  const sexRa = /[hH:]|\s/.test(match[1].trim());
+  let ra = sexagesimal(match[1]);
+  const dec = sexagesimal(match[2].replace(/\s+/g, " "));
+  if (ra == null || dec == null) return null;
+  if (!sexRa && !/[hH]$/.test(match[1]) && ra > 24) ra /= 15;
+  if (ra < 0 || ra >= 24 || Math.abs(dec) > 90) return null;
+  const hh = Math.floor(ra), mm = (ra - hh) * 60;
+  return { id: `coord:${ra.toFixed(4)},${dec.toFixed(4)}`, name: `적경 ${hh}h ${mm.toFixed(1)}m · 적위 ${dec >= 0 ? "+" : ""}${dec.toFixed(2)}°`,
+    ra, dec, kind: "좌표", aliases: [], size: null };
+}
+
+export function searchObservingTargets(query) {
+  const key = catalogKey(query);
+  if (!key) return observingTargets;
+  const coordinate = parseCoordinates(query);
+  if (coordinate) return [coordinate];
+  const matches = observingTargets.filter(({ name, aliases }) => [name, ...aliases]
+    .some((value) => catalogKey(value).includes(key)));
+  return matches.sort((a, b) => Number(b.aliases.some((alias) => catalogKey(alias) === key))
+    - Number(a.aliases.some((alias) => catalogKey(alias) === key)));
+}
+
+export function observeTarget(target, time, { lat, lon }) {
+  const moon = SunCalc.getMoonPosition(time, lat, lon);
+  const moonAlt = moon.altitude * DEG;
+  const moonAz = ((moon.azimuth * DEG) + 540) % 360;
+  const angularSize = (radius, distance) => 120 * DEG * Math.asin(radius / distance);
+  if (target.id === "moon") {
+    const diameter = angularSize(1737.4, moon.distance);
+    return { alt: moonAlt, az: moonAz, moonSeparation: null, size: [diameter, diameter] };
+  }
+  const planet = PLANETS.find((candidate) => candidate.id === target.id);
+  const coords = planet ? planetRaDec(planet, time) : target;
+  const { alt, az } = altAz(coords.ra, coords.dec, time, lat, lon);
+  const diameter = planet ? angularSize(PLANET_RADII[planet.id], coords.dist * 149597870.7) : null;
+  return { alt, az, moonSeparation: sep(az, alt, moonAz, moonAlt), size: diameter ? [diameter, diameter] : target.size };
 }
 
 const DIRS = ["북", "북동", "동", "남동", "남", "남서", "서", "북서"];
@@ -175,7 +272,7 @@ function bestOf(samples, posAt, opts) {
     if (alt < opts.minAlt) continue;
     let moonF = 1;
     if (s.moonAlt > 0 && opts.moonSens > 0) {
-      const d = sep(alt, az, s.moonAlt, s.moonAz);
+      const d = sep(az, alt, s.moonAz, s.moonAlt);
       const near = d < 25 ? 1 : d < 60 ? 0.6 : 0.35;
       moonF = 1 - opts.moonSens * s.ill * near * Math.min(1, (s.moonAlt + 3) / 25);
     }
@@ -194,8 +291,11 @@ export function recommendTargets(ymdStr, lat, lon) {
   // 유성우
   const [yy] = ymdStr.split("-").map(Number);
   for (const [name, m, d, win, zhr, ra, dec] of SHOWERS) {
-    const peak = `${yy}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const diff = Math.round((new Date(`${ymdStr}T12:00:00${KST}`) - new Date(`${peak}T12:00:00${KST}`)) / 86400e3);
+    // 연말·연초를 넘나드는 경우(12/31에 1/3 극대 등) 앞뒤 해 중 가장 가까운 극대일
+    const here = new Date(`${ymdStr}T12:00:00${KST}`);
+    const diff = [yy - 1, yy, yy + 1]
+      .map((y) => Math.round((here - new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T12:00:00${KST}`)) / 86400e3))
+      .reduce((a, b) => (Math.abs(b) < Math.abs(a) ? b : a));
     // 극대일 밤 또는 그 전날 밤(새벽이 극대)이 가장 좋음
     if (diff < -win - 1 || diff > win) continue;
     const b = bestOf(samples, () => ({ ra, dec }), { ...base, maxSun: -15, minAlt: 10, moonSens: 0.9 });

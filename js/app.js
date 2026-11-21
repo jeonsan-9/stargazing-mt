@@ -1,13 +1,38 @@
 /* global maplibregl, deck, SunCalc */
 import { SITES, DEPARTURE } from "./sites.js";
+import { renderSiteInfo } from "./site-info.js";
 import { MODELS, GRID_MODELS, modelLabel } from "./models.js";
 import { loadForecast } from "./data.js";
 import { renderMonth, renderSemester, renderYear, moonIcon } from "./longrange.js";
 import { targetsHTML } from "./targets.js";
 import { scoreNight, scoreColor, moonInfo, darkWindow, parseLocal, ymd, addDays, nightIndices } from "./score.js";
+import { cityLightsEnabled, rememberCityLights } from "./city-lights.js";
+import { LAT0, LON0 } from "./diorama/geo.js";
+import { drawNightSky, nightSky } from "./diorama/night.js";
 
 const EXAG = 3; // 지형 과장 배율 (한반도 산은 낮아서 3배로 키워야 높낮이가 보임)
 const CLOUD_ALT = 2500; // 구름층 고도 (m, 과장 전)
+
+// 지도 색감 테마. ?theme=glade 는 아늑한 미니어처(디오라마) 밤 풍경
+const THEME = document.documentElement.dataset.theme || "glade";
+const GLADE = THEME.startsWith("glade");
+const PAL = GLADE
+  ? {
+      land: "#56648a", water: "#34446f", waterway: "#3d4f7c", stateLine: "#8d97c4", countryLine: "#a7afd6", road: "#8a86b0",
+      label: "#fff4e2", labelState: "#d9d2f0", halo: "rgba(52,48,88,0.9)",
+      shadow: "#2b2550", accent: "#6f7fb0", highlight: "#ffe2bd",
+      dark: [92, 92, 150], moonlit: [255, 226, 190], dusk: [255, 180, 150],
+      sky: [58, 66, 118], skyMoon: [96, 104, 160], skyDusk: [240, 170, 150], horizon: [255, 196, 170],
+      cloud: [255, 248, 242], cloudBlur: 16, mask: "#2a2748", maskOpacity: 0.55,
+    }
+  : {
+      land: "#0b1124", water: "#04060f", waterway: "#0a1022", stateLine: "#2c3a66", countryLine: "#3a4a80", road: "#26315a",
+      label: "#9fabcf", labelState: "#5d6a90", halo: "rgba(6,9,20,0.85)",
+      shadow: "#000000", accent: "#1b2440", highlight: "#b8c8f0",
+      dark: [26, 32, 54], moonlit: [120, 136, 186], dusk: [255, 190, 150],
+      sky: [11, 16, 32], skyMoon: [40, 52, 88], skyDusk: [70, 60, 90], horizon: [120, 130, 170],
+      cloud: [235, 240, 250], cloudBlur: 10, mask: "#04060d", maskOpacity: 0.78,
+    };
 
 const state = {
   data: null,
@@ -33,7 +58,8 @@ const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const fmtHour = (d) => (d && !isNaN(d) ? String(+d.toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "Asia/Seoul" }) % 24).padStart(2, "0") + "시" : "-");
 
 // ---------- 지도 ----------
-const map = new maplibregl.Map({
+const terrainMode = document.documentElement.dataset.map === "terrain";
+const map = terrainMode ? new maplibregl.Map({
   container: "map",
   style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
   center: [128.95, 36.12],
@@ -49,11 +75,44 @@ const map = new maplibregl.Map({
   minZoom: 6.2,
   renderWorldCopies: false,
   attributionControl: { compact: true },
-});
-map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+}) : null;
+if (map) map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
 
-const overlay = new deck.MapboxOverlay({ interleaved: false, layers: [] });
-map.addControl(overlay);
+const overlay = map ? new deck.MapboxOverlay({ interleaved: false, layers: [] }) : null;
+if (map) map.addControl(overlay);
+let diorama, dioramaHour, dioramaCloud;
+let detailSky;
+
+async function loadDiorama() {
+  if (map) {
+    $("map-link").href = "./index.html";
+    $("map-link").textContent = "3D 지도";
+    return;
+  }
+  $("toggle3d").textContent = "시점 초기화";
+  $("map-status").textContent = "3D 지도 불러오는 중…";
+  try {
+    const { Diorama } = await import("./diorama/scene.js?v=20261122f");
+    const pins = $("pins");
+    diorama = await new Diorama($("scene"), pins, $("moon")).load("models/korea.glb?v=20261122d");
+    diorama.calibrateWith([...SITES, DEPARTURE]);
+    diorama.setCityLights($("city-view").checked);
+    pins.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-site]");
+      if (!button) return;
+      if (state.data) selectSite(button.dataset.site, false);
+      else location.href = "./diorama.html?site=" + encodeURIComponent(button.dataset.site);
+    });
+    diorama.setTime(new Date());
+    diorama.setSites(SITES);
+    diorama.start();
+    $("map-status").textContent = diorama.placeholder ? "임시 지형 표시 중" : "";
+    renderLayers();
+  } catch (error) {
+    $("map-status").textContent = "3D 지도를 열지 못했습니다. 기존 지도로 볼 수 있어요.";
+    console.error(error);
+  }
+}
 
 // ---------- 지도 스타일 다듬기 ----------
 // CARTO dark-matter 위에서 색을 절제하고 라벨은 주요 도시와 도 이름만 남김
@@ -70,8 +129,8 @@ function styleBasemap() {
       }
       map.setLayoutProperty(id, "text-field", ["coalesce", ["get", "name:ko"], ["get", "name"]]);
       map.setLayoutProperty(id, "text-letter-spacing", 0.08);
-      map.setPaintProperty(id, "text-color", id === "place_state" ? "#5d6a90" : "#9fabcf");
-      map.setPaintProperty(id, "text-halo-color", "rgba(6,9,20,0.85)");
+      map.setPaintProperty(id, "text-color", id === "place_state" ? PAL.labelState : PAL.label);
+      map.setPaintProperty(id, "text-halo-color", PAL.halo);
       map.setPaintProperty(id, "text-halo-width", 1.4);
       continue;
     }
@@ -79,22 +138,22 @@ function styleBasemap() {
       map.setLayoutProperty(id, "visibility", "none");
       continue;
     }
-    if (id === "background") map.setPaintProperty(id, "background-color", "#0b1124");
-    else if (id === "water") map.setPaintProperty(id, "fill-color", "#04060f");
-    else if (id === "waterway") map.setPaintProperty(id, "line-color", "#0a1022");
+    if (id === "background") map.setPaintProperty(id, "background-color", PAL.land);
+    else if (id === "water") map.setPaintProperty(id, "fill-color", PAL.water);
+    else if (id === "waterway") map.setPaintProperty(id, "line-color", PAL.waterway);
     else if (id === "landcover" || id === "landuse" || id === "park_national_park") map.setPaintProperty(id, "fill-opacity", 0.0);
     else if (id.startsWith("boundary_state")) {
-      map.setPaintProperty(id, "line-color", "#2c3a66");
+      map.setPaintProperty(id, "line-color", PAL.stateLine);
       map.setPaintProperty(id, "line-opacity", 0.7);
-    } else if (id.startsWith("boundary_country")) map.setPaintProperty(id, "line-color", "#3a4a80");
+    } else if (id.startsWith("boundary_country")) map.setPaintProperty(id, "line-color", PAL.countryLine);
     else if (/^(road|bridge)_(mot|trunk)/.test(id)) {
-      map.setPaintProperty(id, "line-color", id.includes("case") ? "rgba(0,0,0,0)" : "#26315a");
+      map.setPaintProperty(id, "line-color", id.includes("case") ? "rgba(0,0,0,0)" : PAL.road);
       map.setPaintProperty(id, "line-opacity", 0.55);
     }
   }
 }
 
-map.on("load", () => {
+map?.on("load", () => {
   styleBasemap();
   map.addSource("dem", {
     type: "raster-dem",
@@ -119,14 +178,18 @@ map.on("load", () => {
       source: "dem-hs",
       paint: {
         "hillshade-exaggeration": 1,
-        "hillshade-shadow-color": "#000000",
-        "hillshade-highlight-color": "#b8c8f0",
-        "hillshade-accent-color": "#1b2440",
+        "hillshade-shadow-color": PAL.shadow,
+        "hillshade-highlight-color": PAL.highlight,
+        "hillshade-accent-color": PAL.accent,
         "hillshade-illumination-direction": 315,
       },
     },
     firstSymbol
   );
+  map.addSource("city-lights", {type: "image", url: "./js/diorama/lights-map.png",
+    coordinates: [[124.5, 38.8], [131, 38.8], [131, 32.8], [124.5, 32.8]]});
+  map.addLayer({id: "city-lights", type: "raster", source: "city-lights",
+    layout: {visibility: $("city-view").checked ? "visible" : "none"}, paint: {"raster-opacity": 0.84}}, firstSymbol);
   map.setSky({
     "sky-color": "#0b1020",
     "horizon-color": "#22305a",
@@ -141,7 +204,7 @@ map.on("load", () => {
 });
 
 function apply3D() {
-  if (!map.getSource("dem")) return;
+  if (!map?.getSource("dem")) return;
   if (state.is3D) {
     map.setTerrain({ source: "dem", exaggeration: EXAG });
     map.easeTo({ pitch: 62, bearing: -20, duration: 800 });
@@ -244,9 +307,7 @@ function cloudImageAt(hourIdx) {
     for (let c = 0; c < nLon; c++) {
       const v = field[r * nLon + c];
       const p = (r * nLon + c) * 4;
-      img.data[p] = 235;
-      img.data[p + 1] = 240;
-      img.data[p + 2] = 250;
+      [img.data[p], img.data[p + 1], img.data[p + 2]] = PAL.cloud;
       img.data[p + 3] = v == null ? 0 : Math.round(Math.pow(v / 100, 1.3) * 235);
     }
   }
@@ -257,7 +318,7 @@ function cloudImageAt(hourIdx) {
   const big = cloudCanvas.getContext("2d");
   big.imageSmoothingEnabled = true;
   big.imageSmoothingQuality = "high";
-  big.filter = "blur(10px)";
+  big.filter = `blur(${PAL.cloudBlur}px)`;
   big.drawImage(small, 0, 0, cloudCanvas.width, cloudCanvas.height);
   big.filter = "none";
   // 구름 질감: 미리 만든 잡음으로 가장자리를 뭉게뭉게하게
@@ -319,7 +380,7 @@ function addKoreaMask() {
     },
   });
   // 라벨보다 위에 올려 일본·중국·북한 지명도 함께 흐리게
-  map.addLayer({ id: "korea-mask", type: "fill", source: "korea-mask", paint: { "fill-color": "#04060d", "fill-opacity": 0.78, "fill-antialias": false } });
+  map.addLayer({ id: "korea-mask", type: "fill", source: "korea-mask", paint: { "fill-color": PAL.mask, "fill-opacity": PAL.maskOpacity, "fill-antialias": false } });
 }
 
 // ---------- 하늘의 달 ----------
@@ -383,12 +444,19 @@ const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
 const rgb = (c) => `rgb(${c.join(",")})`;
 
 let lastMoon = null;
-map.on("rotate", () => updateSkyMoon(lastMoon));
-window.addEventListener("resize", () => updateSkyMoon(lastMoon));
+map?.on("rotate", () => updateSkyMoon(lastMoon));
+if (map) window.addEventListener("resize", () => updateSkyMoon(lastMoon));
 
 function updateLighting() {
-  if (!state.data || !map.getLayer("hillshade")) return;
+  if (!state.data) return;
   const t = currentTime();
+  if (!map) {
+    const { altitude } = SunCalc.getMoonPosition(t, LAT0, LON0);
+    const fraction = SunCalc.getMoonIllumination(t).fraction;
+    $("moonLabel").textContent = altitude > 0 ? `달 ${Math.round(fraction * 100)}%` : "달 지평선 아래";
+    return;
+  }
+  if (!map.getLayer("hillshade")) return;
   const [lat, lon] = LIGHT_POINT;
   const mp = SunCalc.getMoonPosition(t, lat, lon);
   const sp = SunCalc.getPosition(t, lat, lon);
@@ -400,24 +468,21 @@ function updateLighting() {
   const moonLight = moonAlt > 0 ? ill * Math.min(1, (moonAlt + 2) / 30) : 0;
   const twilight = sunAlt > -18 ? Math.min(1, (sunAlt + 18) / 18) : 0;
 
-  const dark = [26, 32, 54];
-  const moonlit = [120, 136, 186];
-  const dusk = [255, 190, 150];
+  const { dark, moonlit, dusk } = PAL;
   let hi = mix(dark, moonlit, moonLight);
   if (twilight > 0) hi = mix(hi, dusk, twilight * 0.6);
   map.setPaintProperty("hillshade", "hillshade-highlight-color", rgb(hi));
-  map.setPaintProperty("hillshade", "hillshade-exaggeration", 0.4 + 0.3 * Math.max(moonLight, twilight));
+  map.setPaintProperty("hillshade", "hillshade-exaggeration", (GLADE ? 0.55 : 0.4) + 0.3 * Math.max(moonLight, twilight));
   map.setPaintProperty("hillshade", "hillshade-illumination-anchor", "map");
   map.setPaintProperty(
     "hillshade",
     "hillshade-illumination-direction",
     moonLight > 0.02 ? az : ((sp.azimuth * 180) / Math.PI + 180 + 360) % 360
   );
-  const skyBase = [11, 16, 32];
-  const sky = mix(mix(skyBase, [40, 52, 88], moonLight), [70, 60, 90], twilight * 0.7);
+  const sky = mix(mix(PAL.sky, PAL.skyMoon, moonLight), PAL.skyDusk, twilight * 0.7);
   map.setSky({
     "sky-color": rgb(sky),
-    "horizon-color": rgb(mix(sky, [120, 130, 170], 0.35 + 0.3 * moonLight)),
+    "horizon-color": rgb(mix(sky, PAL.horizon, 0.35 + 0.3 * moonLight)),
     "fog-color": rgb(sky),
     "sky-horizon-blend": 0.6,
     "horizon-fog-blend": 0.6,
@@ -440,9 +505,29 @@ function siteZ(r) {
 function renderLayers() {
   if (!state.data) return;
   const visible = state.results.filter((r) => state.showExtra || r.site.primary);
+  if (!map) {
+    if (!diorama) return;
+    const time = currentTime();
+    const minute = Math.floor(+time / 180_000);
+    if (dioramaHour !== minute) {
+      diorama.setTime(time);
+      dioramaHour = minute;
+    }
+    const i = state.hourFrac < 0.5 ? state.hourIdx : state.nextIdx;
+    const key = `${state.cloudModel}:${state.cloudLayer}:${i}`;
+    if (dioramaCloud !== key) {
+      const grid = state.data.grid;
+      diorama.setClouds(cloudField(i), grid?.lats ?? [], grid?.lons ?? []);
+      dioramaCloud = key;
+    }
+    diorama.setCloudVisibility(state.showCloud);
+    diorama.setSites(visible.map(({ site, hours }) =>
+      ({ ...site, score: hours.find((hour) => hour.i === i)?.score ?? null })));
+    return;
+  }
   const layers = [];
 
-  if (state.showCloud) {
+  if (state.showCloud && state.data.grid) {
     // 앞뒤 두 시각의 구름을 슬라이더 위치만큼 섞어서, 끄는 동안 구름이 부드럽게 변하게 함
     const bounds = cloudBounds(state.is3D ? CLOUD_ALT * EXAG : 0);
     const pairs = [
@@ -465,7 +550,38 @@ function renderLayers() {
     });
   }
 
-  layers.push(
+  if (GLADE) {
+    // 디오라마: 막대 대신 등불처럼 빛나는 동그란 표시
+    const z = (r) => siteZ(r) + (state.is3D ? 120 * EXAG : 0);
+    layers.push(
+      new deck.ScatterplotLayer({
+        id: "site-glow",
+        data: visible,
+        getPosition: (r) => [r.site.lon, r.site.lat, z(r)],
+        getRadius: (r) => (r.site.primary ? 5200 : 3600),
+        radiusMinPixels: 22,
+        getFillColor: [255, 196, 120, 70],
+        stroked: false,
+        parameters: { depthTest: false },
+        updateTriggers: { getPosition: [state.is3D] },
+      }),
+      new deck.ScatterplotLayer({
+        id: "sites",
+        data: visible,
+        pickable: true,
+        getPosition: (r) => [r.site.lon, r.site.lat, z(r)],
+        getRadius: (r) => (r.site.primary ? 1800 : 1300),
+        radiusMinPixels: 8,
+        getFillColor: (r) => scoreColor(r.score, 255),
+        getLineColor: [255, 246, 226, 255],
+        stroked: true,
+        lineWidthMinPixels: 2.5,
+        parameters: { depthTest: false },
+        onClick: ({ object }) => object && selectSite(object.site.id, true),
+        updateTriggers: { getPosition: [state.is3D], getFillColor: [state.night] },
+      })
+    );
+  } else layers.push(
     new deck.ColumnLayer({
       id: "sites",
       data: visible,
@@ -514,14 +630,19 @@ function renderLayers() {
       getPosition: (r) =>
         r.departure
           ? [r.site.lon, r.site.lat, state.is3D ? 40 * EXAG : 0]
-          : [r.site.lon, r.site.lat, siteZ(r) + (state.is3D ? 300 + (r.score ?? 0) * 60 : 0)],
+          : [r.site.lon, r.site.lat, siteZ(r) + (state.is3D ? (GLADE ? 120 * EXAG : 300 + (r.score ?? 0) * 60) : 0)],
       getText: (r) => (r.departure ? "출발 · 계명대" : `${r.site.name} ${r.score ?? "-"}`),
       getSize: (r) => (r.site.primary || r.departure ? 14 : 12),
-      getColor: (r) => (r.departure ? [150, 200, 255, 255] : r.site.primary ? [255, 255, 255, 255] : [200, 205, 215, 230]),
-      getPixelOffset: [0, -14],
+      getColor: (r) =>
+        GLADE
+          ? r.departure ? [90, 80, 140, 255] : [62, 52, 96, 255]
+          : r.departure ? [150, 200, 255, 255] : r.site.primary ? [255, 255, 255, 255] : [200, 205, 215, 230],
+      // 가까이 붙은 보현산 두 곳 이름이 겹치지 않게 하나는 아래로
+      getPixelOffset: (r) => (r.site.id === "bohyeon_sci" ? [0, GLADE ? 22 : 14] : [0, GLADE ? -22 : -14]),
       background: true,
-      getBackgroundColor: [10, 14, 25, 190],
-      backgroundPadding: [5, 3],
+      getBackgroundColor: GLADE ? [255, 244, 226, 235] : [10, 14, 25, 190],
+      backgroundPadding: GLADE ? [8, 4] : [5, 3],
+      ...(GLADE ? { getBorderColor: [255, 255, 255, 255], getBorderWidth: 0 } : {}),
       parameters: { depthTest: false },
       updateTriggers: { getPosition: [state.is3D, state.night], getText: [state.night] },
     })
@@ -556,7 +677,32 @@ function recompute() {
 
 // ---------- 화면 ----------
 
+// 이번 주 금·토 밤 중 보현산 점수가 더 좋은 밤으로 한 줄 결론
+function renderVerdict() {
+  const box = $("verdict");
+  if (!box) return;
+  const site = SITES.find((s) => s.id === "bohyeon_obs");
+  const cands = nightsAvailable()
+    .filter((n) => [5, 6].includes(new Date(`${n}T12:00:00+09:00`).getDay()))
+    .map((n) => ({ n, r: scoreNight(state.data, site, n) }))
+    .filter((x) => x.r?.score != null);
+  if (!cands.length) {
+    box.innerHTML = "";
+    return;
+  }
+  const { n, r } = cands.reduce((a, b) => (b.r.score > a.r.score ? b : a));
+  const d = new Date(`${n}T12:00:00+09:00`);
+  const win = r.hours.filter((h) => h.t >= r.windowStart && h.t < r.windowEnd);
+  const rain = Math.max(0, ...win.map((h) => h.precip ?? 0));
+  const [word, cls] = r.score >= 70 ? ["가자!", "go"] : r.score >= 45 ? ["애매해요", "maybe"] : ["접자", "no"];
+  box.className = `verdict ${cls}`;
+  box.innerHTML = `<b>이번 주말 보현산: ${word}</b>
+    <small>${WD[d.getDay()]}요일 밤 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 구름 ${r.cloud}%${rain >= 0.1 ? ` · 비 ${rain.toFixed(1)}mm` : ""} · ${r.score}점 · 모델 일치 ${r.agreement}</small>`;
+  box.onclick = () => setNight(n);
+}
+
 function renderNights() {
+  renderVerdict();
   const box = $("nights");
   box.innerHTML = "";
   for (const n of nightsAvailable()) {
@@ -581,6 +727,7 @@ function renderHourSlider() {
   const idx = nightHourIndices();
   const slider = $("hour");
   slider.min = 0;
+  slider.disabled = idx.length === 0;
   slider.max = Math.max(0, idx.length - 1);
   slider.step = 0.02;
   if (!idx.includes(state.hourIdx)) {
@@ -593,6 +740,10 @@ function renderHourSlider() {
   }
   slider.value = Math.max(0, idx.indexOf(state.hourIdx));
   slider.oninput = () => {
+    if (!idx.length) {
+      $("hourLabel").textContent = "예보 시간 없음";
+      return;
+    }
     const v = +slider.value;
     const k = Math.min(Math.floor(v), idx.length - 1);
     state.hourIdx = idx[k];
@@ -601,6 +752,10 @@ function renderHourSlider() {
     updateHourLabel();
     updateLighting();
     renderLayers();
+    if (detailSky && document.body.classList.contains("detail-open")) {
+      drawNightSky($("detail-night-chart"), detailSky, currentTime());
+      updateSiteSkyLink();
+    }
   };
   slider.oninput();
 }
@@ -611,6 +766,7 @@ function currentTime() {
 
 function updateHourLabel() {
   const t = currentTime();
+  $("wide-map-link").href = `./diorama.html?${new URLSearchParams({ t: t.toISOString() })}`;
   const has = !!cloudField();
   const md = t.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" });
   $("hourLabel").textContent = `${md} ${fmtTime(t)}${has ? "" : " (자료 없음)"}`;
@@ -664,7 +820,7 @@ function renderList() {
     if (r.site.primary !== lastPrimary) {
       const h = document.createElement("div");
       h.className = "group";
-      h.textContent = r.site.primary ? "영천 · 동아리 MT 장소" : "비교용 (영천이 흐릴 때 대안)";
+      h.textContent = r.site.primary ? "영천 · 동아리 MT 장소" : "전국 관측지";
       list.appendChild(h);
       lastPrimary = r.site.primary;
     }
@@ -672,7 +828,7 @@ function renderList() {
     el.className = "site" + (state.selected === r.site.id ? " active" : "");
     el.innerHTML = `
       <span class="score" style="background:rgba(${scoreColor(r.score).slice(0, 3).join(",")},.92)">${r.score ?? "-"}</span>
-      <span class="sname">${r.site.name}${r.site.verified ? "" : ' <em title="좌표 확인 필요">위치 확인 필요</em>'}<small>${r.score == null ? "예보 없음" : `최적 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 좋은 시간 ${r.goodHours}h · 모델 일치 ${r.agreement}`}</small></span>`;
+      <span class="sname">${r.site.name}${r.site.verified ? "" : ' <em title="좌표 확인 필요">위치 확인 필요</em>'}<small>${r.site.region} · ${r.score == null ? "예보 없음" : `최적 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 좋은 시간 ${r.goodHours}h · 모델 일치 ${r.agreement}`}</small></span>`;
     el.onclick = () => selectSite(r.site.id, true);
     list.appendChild(el);
   }
@@ -686,7 +842,8 @@ function cell(v, cls = "", style = "", title = "") {
 function cloudCell(v) {
   if (v == null) return cell("·", "na");
   const a = (Math.min(100, v) / 100) * 0.85;
-  return cell(Math.round(v), "c", `background:rgba(225,232,245,${a.toFixed(2)});color:${v > 55 ? "#0b1020" : "#e6edf3"}`);
+  // 색은 테마 CSS 변수로 (밝은 종이 테마에서도 읽히게)
+  return cell(Math.round(v), "c", `background:rgba(var(--cloud-rgb, 225, 232, 245), ${a.toFixed(2)});color:${v > 55 ? "var(--cloud-hi-text, #0b1020)" : "var(--cloud-lo-text, #e6edf3)"}`);
 }
 
 function warnCell(v, fmt, bad, worse) {
@@ -742,6 +899,7 @@ function hourTable(r) {
       ${row("시정", hrs.map((h) => (h.vis == null ? cell("·", "na") : cell(Math.round(h.vis / 1000), h.vis < 10000 ? "w1" : ""))).join(""), "km")}
       ${row("시상", hrs.map((h) => warnCell(h.seeing, (v) => v, 4, 6)).join(""), "7Timer 1(좋음)~8(나쁨)")}
       ${row("투명도", hrs.map((h) => warnCell(h.transparency, (v) => v, 4, 6)).join(""), "7Timer 1(좋음)~8(나쁨)")}
+      ${row("비", hrs.map((h) => (h.precip == null ? cell("·", "na") : cell(h.precip >= 0.1 ? h.precip.toFixed(1) : "", h.precip >= 1 ? "w2" : h.precip >= 0.1 ? "w1" : ""))).join(""), "mm/시간, 모델 중간값")}
       ${row("기온", hrs.map((h) => (h.temp == null ? cell("·", "na") : cell(Math.round(h.temp)))).join(""), "°C")}
     </tbody>
   </table></div>`;
@@ -751,11 +909,14 @@ function renderDetail() {
   const box = $("detail");
   const r = state.results.find((x) => x.site.id === state.selected);
   if (!r) {
+    detailSky = undefined;
     box.innerHTML = `<p class="hint">관측지를 누르면 시간별 예보표와 그날 밤 달 정보가 보입니다.</p>`;
     return;
   }
   const moon = moonInfo(state.night, r.site.lat, r.site.lon);
   const dw = darkWindow(state.night, r.site.lat, r.site.lon);
+  detailSky = nightSky(state.night, r.site);
+  const moonless = detailSky.moonless.map(([from, to]) => `${fmtTime(from)}–${fmtTime(to)}`).join(", ");
   const elev = state.data.sites[r.site.id]?.elevation;
   const bars = Object.entries(r.models)
     .sort((a, b) => a[1] - b[1])
@@ -768,6 +929,9 @@ function renderDetail() {
   const [cr, cg, cb] = scoreColor(r.score);
   box.innerHTML = `
     <h3>${r.site.name} <span class="score" style="background:rgba(${cr},${cg},${cb},.92)">${r.score ?? "-"}</span></h3>
+    <a id="site-sky-link" class="diorama-link" href="./sky.html">이곳에서 하늘 보기</a>
+    ${!map ? '<button id="site-model" class="diorama-link" type="button">이 지점 확대</button>' : ''}
+    <details><summary>관측 시 주의사항</summary><div id="main-site-info" class="hint"></div></details>
     <p class="lead">${
       r.score == null
         ? "이 밤의 예보 자료가 없습니다."
@@ -776,6 +940,9 @@ function renderDetail() {
     <div class="kv"><span>해발</span><b>${elev != null ? Math.round(elev) + " m" : "-"}</b></div>
     <div class="kv"><span>천문박명 (완전히 어두운 시간)</span><b>${fmtTime(dw.dusk)} ~ ${fmtTime(dw.dawn)}</b></div>
     <div class="kv"><span>달</span><b>${moon.phaseName} · ${Math.round(moon.fraction * 100)}% · 뜸 ${fmtTime(moon.rise)} / 짐 ${fmtTime(moon.set)}</b></div>
+    <div class="kv"><span>달 없는 어둠</span><b>${moonless || "이 밤에는 없음"}</b></div>
+    <canvas id="detail-night-chart" width="604" height="212" role="img" aria-label="해와 달의 고도, 달 없는 시간대"></canvas>
+    <p class="hint">분홍색은 해, 크림색은 달, 음영은 달 없는 어둠</p>
     <h4>오늘 밤 볼거리</h4>
     ${targetsHTML(state.night, r.site.lat, r.site.lon)}
     <h4>시간별 예보</h4>
@@ -783,6 +950,18 @@ function renderDetail() {
     <h4>모델별 구름량 (가장 좋은 3시간 평균)</h4>
     ${bars || '<p class="hint">자료 없음</p>'}
     <p class="hint">모델 일치도 ${r.agreement ?? "-"} (모델 간 평균 차이 ${r.spread != null ? Math.round(r.spread) : "-"}%p)</p>`;
+  drawNightSky($("detail-night-chart"), detailSky, currentTime());
+  renderSiteInfo($("main-site-info"), r.site.id);
+  $("site-model")?.addEventListener("click", () => diorama?.focusSite(r.site));
+  updateSiteSkyLink();
+}
+
+function updateSiteSkyLink() {
+  const link = $("site-sky-link");
+  if (!link || !state.night || !state.selected) return;
+  const query = new URLSearchParams({ site: state.selected, day: state.night, t: currentTime().toISOString() });
+  if (map) query.set("from", "terrain");
+  link.href = `./sky.html?${query}`;
 }
 
 function avg(a) {
@@ -791,10 +970,12 @@ function avg(a) {
 
 function selectSite(id, fly) {
   state.selected = id;
+  updateObserveLink();
   renderList();
   renderDetail();
   document.body.classList.add("detail-open");
-  if (fly) {
+  if (!map) renderLayers();
+  if (fly && map) {
     const s = SITES.find((x) => x.id === id);
     map.flyTo({ center: [s.lon, s.lat], zoom: 9.5, pitch: state.is3D ? 65 : 0, duration: 1200 });
   }
@@ -802,6 +983,7 @@ function selectSite(id, fly) {
 
 function setNight(n) {
   state.night = n;
+  updateObserveLink();
   recompute();
   renderNights();
   renderHourSlider();
@@ -810,11 +992,27 @@ function setNight(n) {
   renderLayers();
 }
 
+function updateObserveLink() {
+  const query = new URLSearchParams({ site: state.selected ?? "bohyeon_obs" });
+  if (state.night) query.set("day", state.night);
+  $("observe-link").href = `./observe.html?${query}`;
+}
+
 // ---------- 컨트롤 ----------
 $("toggle3d").onclick = () => {
+  if (!map) { diorama?.resetView(); return; }
   state.is3D = !state.is3D;
   $("toggle3d").textContent = state.is3D ? "평면 보기" : "3D 보기";
   apply3D();
+};
+$("city-view").checked = cityLightsEnabled();
+$("city-legend").hidden = !$("city-view").checked;
+$("city-view").onchange = (event) => {
+  const enabled = event.target.checked;
+  rememberCityLights(enabled);
+  $("city-legend").hidden = !enabled;
+  diorama?.setCityLights(enabled);
+  if (map?.getLayer("city-lights")) map.setLayoutProperty("city-lights", "visibility", enabled ? "visible" : "none");
 };
 $("toggleCloud").onchange = (e) => {
   state.showCloud = e.target.checked;
@@ -827,6 +1025,7 @@ $("toggleExtra").onchange = (e) => {
 };
 let playTimer = null;
 $("play").onclick = () => {
+  if (!state.data || $("hour").disabled) return;
   if (playTimer) {
     clearInterval(playTimer);
     playTimer = null;
@@ -878,28 +1077,40 @@ function renderView() {
 
 function setView(v) {
   state.view = v;
-  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+  document.querySelectorAll("#tabs button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.view === v);
+    b.setAttribute("aria-selected", String(b.dataset.view === v));
+  });
   ["week", "month", "sem", "year"].forEach((k) => ($(`view-${k}`).hidden = k !== v));
   renderView();
 }
 document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
 
 // ---------- 시작 ----------
+loadDiorama();
 (async () => {
   try {
     state.data = await loadForecast();
   } catch (e) {
-    $("status").textContent = "예보를 불러오지 못했습니다: " + e.message;
-    console.error(e);
-    return;
+    // Keep the map, sites and Moon usable when the weather service is unavailable.
+    const first = parseLocal(ymd(new Date(Date.now() - 6 * 3600e3)) + "T18:00").getTime();
+    const times = Array.from({ length: 37 }, (_, i) => new Date(first + (i + 9) * 3600e3).toISOString().slice(0, 16));
+    state.data = { source: "astronomy", times, sites: {} };
+    console.warn("예보 연결 실패", e.message);
   }
   const gen = new Date(state.data.generated);
   const srcCount = new Set(Object.values(state.data.sites).flatMap((s) => Object.keys(s.models))).size;
-  $("status").textContent = `예보 ${srcCount}개 소스 · ${gen.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 기준${state.data.source === "live" ? " (실시간 Open-Meteo)" : ""}`;
+  $("status").textContent = state.data.source === "astronomy" ? "예보 연결 없음 · 지도와 밤하늘 이용 가능" : `예보 ${srcCount}개 소스 · ${gen.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 기준${state.data.source === "live" ? " (실시간 Open-Meteo)" : ""}`;
   renderModelSelect();
   state.month = todayYmd().slice(0, 7);
-  setNight(nightsAvailable()[0]);
-  selectSite("bohyeon_obs", false); // 동아리 MT는 항상 영천
+  const params = new URLSearchParams(location.search);
+  const day = params.get("day"), site = params.get("site");
+  setNight(nightsAvailable().includes(day) ? day : nightsAvailable()[0]);
+  if (SITES.some(({ id }) => id === site)) selectSite(site, false);
+  else if (map) selectSite("bohyeon_obs", false); // 동아리 MT는 항상 영천
+  else { state.selected = "bohyeon_obs"; renderList(); }
+  // 휴대폰에선 상세 패널이 메인 화면을 가리므로 처음엔 닫아 둠
+  if (!site && window.matchMedia("(max-width: 760px)").matches) document.body.classList.remove("detail-open");
   window.__app = state; // 디버깅용
   window.__map = map;
 })();

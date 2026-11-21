@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>관측 계획 · AAA 징크스 타파기</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap">
+  <link rel="stylesheet" href="css/observe.css?v=20261122g">
+  <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <a href="./index.html">← 기본 지도</a>
+      <h1>관측 계획</h1>
+    </header>
+    <div class="layout">
+      <section aria-labelledby="search-title">
+        <h2 id="search-title">천체 찾기</h2>
+        <div class="fields">
+          <label>관측지<select id="site"></select></label>
+          <label>관측 날짜<input id="night" type="date" min="1800-01-01" max="2050-12-31" required></label>
+          <label>검색<input id="search" type="search" placeholder="M31, NGC 224, 목성, 5h35m -5°23′"></label>
+          <label>대상<select id="target"></select></label>
+        </div>
+        <p id="search-status" class="hint" role="status"></p>
+        <p class="hint"><a id="site-sky-link" href="./sky.html">이곳에서 하늘 보기</a></p>
+        <details id="site-info">
+          <summary>관측 시 주의사항</summary>
+          <div id="site-notes" class="hint"></div>
+        </details>
+        <figure>
+          <canvas id="altitude" width="604" height="235" role="img" aria-label="태양, 달과 선택한 천체의 고도"></canvas>
+          <figcaption><span class="sun">해</span><span class="moon">달</span><span class="target">대상</span> · 음영은 달 없는 어둠</figcaption>
+        </figure>
+        <label class="scrub">시각 <output id="at-time" for="scrub"></output>
+          <input id="scrub" type="range" min="0" max="144" step="1" value="48">
+        </label>
+        <dl class="metrics">
+          <div><dt>고도</dt><dd id="alt"></dd></div>
+          <div><dt>방위</dt><dd id="az"></dd></div>
+          <div><dt>달과 각거리</dt><dd id="separation"></dd></div>
+          <div><dt>근처 별자리</dt><dd id="constellation"></dd></div>
+        </dl>
+        <p id="best" class="hint"></p>
+        <p id="crossings" class="hint"></p>
+        <details open>
+          <summary>현재 하늘 지도</summary>
+          <figure>
+            <canvas id="sky-map" width="604" height="475" role="img" aria-label="선택 시각의 천체, 방위, 고도와 카메라 화각"></canvas>
+            <figcaption><span class="target">대상 경로</span><span class="moon">달과 촬영 화각</span> · 천체를 눌러 대상 선택</figcaption>
+          </figure>
+          <label class="toggle"><input id="show-figures" type="checkbox" checked> 별자리 선과 이름</label>
+          <p class="hint">중심은 천정, 바깥 원은 지평선입니다. 화각은 수평 기준으로 회전합니다.</p>
+        </details>
+      </section>
+      <section aria-labelledby="frame-title">
+        <h2 id="frame-title">촬영 화각</h2>
+        <div class="fields">
+          <label>센서<select id="sensor">
+            <option value="full">풀프레임 · 36 × 24 mm</option>
+            <option value="aps" selected>APS-C · 23.5 × 15.6 mm</option>
+            <option value="mft">마이크로 포서드 · 17.3 × 13 mm</option>
+            <optgroup label="스마트 망원경 (초점거리 자동)">
+              <option value="seestar_s50">Seestar S50 · 250 mm</option>
+              <option value="seestar_s30">Seestar S30 · 150 mm</option>
+              <option value="dwarf3">DWARF 3 · 150 mm</option>
+            </optgroup>
+            <option value="custom">직접 입력</option>
+          </select></label>
+          <label>초점거리 (mm)<input id="focal" type="number" min="1" max="20000" step="any" value="400" inputmode="decimal"></label>
+        </div>
+        <div id="sensor-size" class="fields" hidden>
+          <label>센서 가로 (mm)<input id="sensor-width" type="number" min="0.1" max="200" step="any" value="23.5"></label>
+          <label>센서 세로 (mm)<input id="sensor-height" type="number" min="0.1" max="200" step="any" value="15.6"></label>
+        </div>
+        <label class="scrub">대상 장축 기준 회전 <output id="rotation" for="angle">0°</output>
+          <input id="angle" type="range" min="-90" max="90" value="0">
+        </label>
+        <figure>
+          <canvas id="framing" width="604" height="340" role="img" aria-label="선택한 천체와 카메라 프레임의 크기 비교"></canvas>
+          <figcaption><span class="moon">현재 장비</span><span class="target">대상 외곽</span><span id="frame-legend-compare" class="compare" hidden>저장 장비</span></figcaption>
+        </figure>
+        <p id="frame-result" class="result" aria-live="polite"></p>
+        <p id="target-size" class="hint"></p>
+        <details>
+          <summary>대상 각크기 직접 입력</summary>
+          <div class="fields">
+            <label>장축 (각분)<input id="major" type="number" min="0.001" max="6000" step="any"></label>
+            <label>단축 (각분)<input id="minor" type="number" min="0.001" max="6000" step="any"></label>
+          </div>
+        </details>
+        <details id="gear-panel" open>
+          <summary>장비 저장 및 비교</summary>
+          <div class="fields">
+            <label>장비 이름<input id="gear-name" maxlength="60" placeholder="예: 400mm 망원, APS-C"></label>
+            <label>비교할 장비<select id="gear-select"></select></label>
+          </div>
+          <div class="actions">
+            <button id="gear-save" type="button">현재 장비 저장</button>
+            <button id="gear-load" type="button">선택 장비 불러오기</button>
+            <button id="gear-remove" type="button" class="plain">선택 장비 삭제</button>
+          </div>
+          <p id="gear-result" class="hint"></p>
+          <p id="gear-status" class="hint" role="status"></p>
+        </details>
+      </section>
+    </div>
+    <section class="marathon" aria-labelledby="marathon-title">
+      <h2 id="marathon-title">메시에 마라톤</h2>
+      <p class="hint">하룻밤에 메시에 천체 110개를 몇 개나 찾을 수 있을까요? 위에서 고른 관측지와 날짜로, 해가 −12° 아래이고 고도 15° 이상인 시간을 계산합니다. 이름을 누르면 위에서 그 천체를 엽니다.</p>
+      <progress id="marathon-progress" max="110" value="0"></progress>
+      <p id="marathon-count" class="result" role="status"></p>
+      <div class="marathon-tools">
+        <label>정렬<select id="marathon-sort">
+          <option value="night">오늘 밤 순서 · 서쪽에서 먼저 지는 것부터</option>
+          <option value="high">지금 높이 뜬 순</option>
+          <option value="number">번호순</option>
+        </select></label>
+        <label class="toggle"><input id="marathon-left" type="checkbox"> 아직 못 본 것만</label>
+        <button id="marathon-reset" type="button" class="plain">체크 모두 지우기</button>
+      </div>
+      <ol id="marathon-list" class="marathon-list"></ol>
+    </section>
+    <section class="sessions" aria-labelledby="sessions-title">
+      <h2 id="sessions-title">관측 계획 · 기록</h2>
+      <p id="session-context" class="hint"></p>
+      <label>메모<textarea id="session-note" rows="2" maxlength="1200" placeholder="촬영 구도, 예상 장비, 실제 하늘 상태"></textarea></label>
+      <div class="actions">
+        <button id="session-plan" type="button">계획 저장</button>
+        <button id="session-complete" type="button">관측 완료로 저장</button>
+        <button id="session-new" type="button" class="plain" hidden>새 기록</button>
+      </div>
+      <p id="session-status" class="hint" role="status">저장한 장비와 기록은 이 브라우저에 보관됩니다.</p>
+      <ul id="session-list" class="session-list"></ul>
+      <button id="session-export" type="button" class="plain" hidden>기록 CSV 내려받기</button>
+    </section>
+    <footer>하늘 위치와 각크기는 계획용 근사치입니다. 각크기 자료 <a href="https://github.com/mattiaverga/OpenNGC">OpenNGC</a> · 데이터 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> · 행성 크기 <a href="https://nssdc.gsfc.nasa.gov/planetary/factsheet/">NASA</a> · 메시에 좌표 <a href="https://github.com/ofrohn/d3-celestial">d3-celestial</a> (BSD-3-Clause)</footer>
+  </main>
+  <script type="module" src="js/observe.js?v=20261122h"></script>
+</body>
+</html>

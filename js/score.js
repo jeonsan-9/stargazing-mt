@@ -1,6 +1,6 @@
 // 관측 점수 계산. SunCalc(전역)를 사용합니다.
 //
-// 시간별 점수 = 100 × 어둠 × 구름 × 달 × 습도 × 바람 × 미세먼지 × 시정
+// 시간별 점수 = 100 × 어둠 × 구름 × 달 × 습도 × 바람 × 미세먼지 × 시정 × 강수
 // 밤 점수   = 그 밤 가장 좋은 연속 3시간의 평균 (관측 세션 기준)
 // 기준은 starswithme.com 의 시간별 지수 방식(달 지면 점수가 크게 오름, 구름/바람/미세먼지/습도/시야)을 참고했고,
 // 수치는 모두 무료 소스(Open-Meteo, MET Norway, 7Timer, 기상청)로 직접 계산합니다.
@@ -102,6 +102,14 @@ export const factor = {
     if (v > 15) return 0.93;
     return 1;
   },
+  // 비가 오면 관측 불가에 가깝게
+  precip(mm) {
+    if (mm == null) return 1;
+    if (mm >= 1) return 0.05;
+    if (mm >= 0.3) return 0.25;
+    if (mm >= 0.1) return 0.6;
+    return 1;
+  },
   vis(m) {
     if (m == null) return 1;
     if (m < 5000) return 0.8;
@@ -144,6 +152,7 @@ export function scoreHour(data, site, i) {
   const wind = medianOf(siteData, "wind", i);
   const vis = medianOf(siteData, "vis", i);
   const temp = medianOf(siteData, "temp", i);
+  const precip = medianOf(siteData, "precip", i);
   const pm25 = siteData.air?.pm25?.[i] ?? null;
   const pm10 = siteData.air?.pm10?.[i] ?? null;
   const seeing = siteData.astro?.seeing?.[i] ?? null;
@@ -157,6 +166,7 @@ export function scoreHour(data, site, i) {
     wind: factor.wind(wind),
     pm: factor.pm25(pm25),
     vis: factor.vis(vis),
+    precip: factor.precip(precip),
   };
   const product = Object.values(f).reduce((a, b) => a * b, 1);
   const score = totals.length ? Math.round(100 * product) : null;
@@ -164,7 +174,7 @@ export function scoreHour(data, site, i) {
 
   return {
     i, t, score, f, sunAlt, moonAlt, illum,
-    total, low, mid, high, cloud, rh, wind, vis, temp, pm25, pm10, seeing, transparency,
+    total, low, mid, high, cloud, rh, wind, vis, temp, precip, pm25, pm10, seeing, transparency,
     spread, n: totals.length,
   };
 }
@@ -176,7 +186,7 @@ export function nightIndices(data, ymdStr) {
   const idx = [];
   data.times.forEach((t, i) => {
     const d = parseLocal(t);
-    if (d >= start && d <= end) idx.push(i);
+    if (d >= start && d < end) idx.push(i);
   });
   return idx;
 }
@@ -192,17 +202,22 @@ export function scoreNight(data, site, ymdStr) {
   if (!dark.length) return { site, hours, score: null, models: {}, dusk, dawn };
 
   // 가장 좋은 연속 3시간
+  // 시간축에서 실제로 이어진 3시간만 (자료가 빠진 시각을 건너뛰어 묶지 않음)
+  const span = Math.min(WINDOW, dark.length);
   let best = { avg: -1, from: 0 };
-  for (let k = 0; k + Math.min(WINDOW, dark.length) <= dark.length; k++) {
-    const win = dark.slice(k, k + WINDOW);
+  for (let k = 0; k + span <= dark.length; k++) {
+    const win = dark.slice(k, k + span);
+    if (win.some((hour, i) => i > 0 && hour.t - win[i - 1].t !== 3600e3)) continue;
     const avg = win.reduce((a, h) => a + h.score, 0) / win.length;
     if (avg > best.avg) best = { avg, from: k };
   }
+  if (best.avg < 0) return { site, hours, score: null, models: {}, dusk, dawn };
   const win = dark.slice(best.from, best.from + WINDOW);
   const peak = dark.reduce((a, h) => (h.score > a.score ? h : a), dark[0]);
   const goodHours = dark.filter((h) => h.score >= 70).length;
   const spread = win.reduce((a, h) => a + h.spread, 0) / win.length;
-  const agreement = spread < 20 ? "높음" : spread < 40 ? "보통" : "낮음";
+  const minModels = Math.min(...win.map((h) => h.n));
+  const agreement = minModels < 2 ? "비교 불가" : spread < 20 ? "높음" : spread < 40 ? "보통" : "낮음";
   const cloud = Math.round(win.reduce((a, h) => a + (h.cloud ?? 0), 0) / win.length);
 
   // 모델별 평균 구름 (가장 좋은 시간대 기준)

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AAA 징크스 타파기 · 디오라마</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/diorama-map.css?v=20261122f" />
+  <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+  <style>
+    :root { --paper: #fff4e2; --ink: #3b3346; --sage: #8fb48a; --honey: #f0b866; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #2a2858; color: var(--ink); font-family: "Gowun Dodum", sans-serif; overflow: hidden; }
+    header { position: fixed; left: 16px; top: 14px; background: var(--paper); border-radius: 18px; padding: 10px 16px;
+      box-shadow: 0 4px 0 rgba(60, 40, 80, .15); }
+    header h1 { margin: 0; font: 22px "Jua", sans-serif; }
+    header small { opacity: .7; }
+    header a { display: inline-block; margin-top: 5px; color: #5c4e72; font-size: 12px; }
+    #time { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(560px, calc(100% - 32px));
+      background: var(--paper); border-radius: 18px; padding: 10px 16px; box-shadow: 0 4px 0 rgba(60, 40, 80, .15); }
+    #time label { display: flex; justify-content: space-between; font-size: 14px; margin: 7px 0 4px; }
+    #time input { width: 100%; accent-color: var(--honey); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
+    .toolbar :is(button, select), #close-site, #site-model { border: 1px solid #d6c6b7; background: #fffbf3; color: var(--ink);
+      border-radius: 8px; min-height: 32px; padding: 3px 8px; font: inherit; font-size: 13px; }
+    .toolbar button[aria-pressed="true"] { background: #e2eddb; border-color: #97a884; }
+    #note { font-size: 12px; margin-top: 4px; color: #6b5871; }
+    #note:empty { display: none; }
+    #site-detail { position: fixed; left: 16px; top: 115px; width: min(338px, calc(100% - 32px));
+      max-height: calc(100% - 140px); overflow: auto; background: var(--paper); border-radius: 16px;
+      padding: 11px 14px; box-shadow: 0 8px 30px #1711324d; }
+    #site-detail h2 { font: 17px "Jua", sans-serif; margin: 0; }
+    #site-sky { display: inline-block; margin: 3px 0 8px; padding: 6px 9px; border-radius: 8px; background: #5d4672; color: #fff3df; font-size: 13px; }
+    #site-detail .title { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+    #site-detail p { margin: 6px 0; font-size: 12px; color: #6b5871; }
+    #site-detail summary { cursor: pointer; font-size: 13px; }
+    #site-detail table { border-collapse: collapse; text-align: left; width: 100%; font-size: 13px; }
+    #site-detail :is(th, td) { padding: 5px 4px; }
+    #site-detail tr + tr, #site-detail tbody { border-top: 1px solid #e5d5c7; }
+    #night-sky { border-top: 1px solid #e5d5c7; margin-top: 10px; padding-top: 9px; font-size: 13px; }
+    #night-sky canvas { display: block; width: 100%; height: auto; border-radius: 10px; margin: 7px 0 3px; }
+    #night-sky ul { margin: 5px 0 0; padding-left: 18px; }
+    #night-sky li { padding: 2px 0; }
+    @media (max-width: 600px) { #site-detail { max-height: calc(100% - 266px); } }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="moon" hidden><canvas width="144" height="144" role="img" aria-label="달의 위상"></canvas><span></span></div>
+  <div id="pins"></div>
+  <header><h1>AAA 징크스 타파기</h1><small>계명대학교 천체관측 동아리</small><br><a href="./index.html">← 예보 지도</a> · <a id="observe-link" href="./observe.html">관측 계획</a></header>
+  <aside id="site-detail" aria-labelledby="site-title" hidden>
+    <div class="title"><h2 id="site-title" tabindex="-1"></h2><button id="close-site" type="button">닫기</button></div>
+    <p id="site-summary"></p>
+    <a id="site-sky" href="./sky.html">이곳에서 하늘 보기</a>
+    <button id="site-model" type="button">이 지점 확대</button>
+    <details><summary>관측 시 주의사항</summary><div id="site-notes"></div></details>
+    <table id="site-hours" hidden><thead><tr><th>시간</th><th>점수</th><th>강수</th><th>구름</th></tr></thead><tbody></tbody></table>
+    <section id="night-sky" aria-labelledby="night-title">
+      <strong id="night-title">밤하늘</strong>
+      <canvas id="night-chart" width="604" height="212" role="img" aria-label="저녁 6시부터 다음 날 오전 6시까지 태양과 달의 고도"></canvas>
+      <p>분홍색은 해, 크림색은 달, 음영은 달 없는 어둠</p>
+      <p id="moonless"></p>
+      <p id="weather-window"></p>
+      <strong>관측 후보</strong>
+      <ul id="night-targets"></ul>
+    </section>
+  </aside>
+  <div id="time">
+    <div class="toolbar">
+      <select id="forecastDay" aria-label="예보 날짜" disabled></select>
+      <button id="cloud-view" type="button" aria-pressed="true">예보 구름</button>
+      <button id="city-view" type="button" aria-pressed="true" aria-describedby="city-legend">도시 불빛</button>
+      <button id="reset-view" type="button">시점 초기화</button>
+    </div>
+    <label for="slider"><span id="when">-</span><span id="moonTxt"></span></label>
+    <input id="slider" type="range" min="0" max="0" value="0" aria-label="예보 시간" disabled />
+    <small id="city-legend" class="city-legend"><i aria-hidden="true"></i> 광공해 참고 · 약한 불빛 → 강한 불빛 <a href="https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VJ146A4" target="_blank" rel="noopener">VIIRS 2024</a></small>
+    <div id="note" role="status">예보 불러오는 중…</div>
+  </div>
+  <script type="module">
+    import { Diorama } from "./js/diorama/scene.js?v=20261122f";
+    import { cityLightsEnabled, rememberCityLights } from "./js/city-lights.js";
+    import { loadForecast } from "./js/data.js";
+    import { SITES, DEPARTURE } from "./js/sites.js";
+    import { renderSiteInfo } from "./js/site-info.js";
+    import { GRID_MODELS } from "./js/models.js";
+    import { addDays, parseLocal, scoreHour, scoreNight, ymd } from "./js/score.js";
+    import { recommendTargets } from "./js/targets.js";
+    import { drawNightSky, nightSky } from "./js/diorama/night.js";
+
+    const q = new URLSearchParams(location.search);
+    const model = q.get("model") || "models/korea.glb?v=20261122d";
+    const d = await new Diorama(document.getElementById("scene"), document.getElementById("pins"), document.getElementById("moon")).load(model);
+    d.calibrateWith([...SITES, DEPARTURE]);
+    const slider = document.getElementById("slider");
+    const datePicker = document.getElementById("forecastDay");
+    const note = document.getElementById("note");
+    const panel = document.getElementById("site-detail");
+    const table = document.getElementById("site-hours");
+    const chart = document.getElementById("night-chart");
+    const timeLabel = new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", weekday: "short", hour: "numeric", timeZone: "Asia/Seoul" });
+    const dayLabel = new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short", timeZone: "Asia/Seoul" });
+    const clockLabel = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Seoul" });
+    const want = q.get("t");
+    const requested = want ? /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(want) ? parseLocal(want) : new Date(want) : null;
+    const validRequest = requested && Number.isFinite(+requested) ? requested : null;
+    let data = null, times = [], cloudModel, selection, activeNight, opener;
+
+    function weather(site, index) {
+      return data?.sites?.[site.id]?.models && times[index] ? scoreHour(data, site, index) : null;
+    }
+
+    function siteDetail(index, time = times[index] ? parseLocal(times[index]) : validRequest ?? new Date()) {
+      const selectedDay = ymd(time);
+      const day = (time.getUTCHours() + 9) % 24 < 6 ? addDays(selectedDay, -1) : selectedDay;
+      const observeParams = new URLSearchParams({site: selection?.id ?? "bohyeon_obs", day});
+      document.getElementById("observe-link").href = `./observe.html?${observeParams}`;
+      if (!selection) return;
+      const skyParams = new URLSearchParams({ site: selection.id, day, t: time.toISOString(), from: "wide" });
+      document.getElementById("site-sky").href = `./sky.html?${skyParams}`;
+      document.getElementById("site-title").textContent = selection.name;
+      const hour = weather(selection, index);
+      document.getElementById("site-summary").textContent = hour?.n
+        ? `${selection.region} · 예보 모델 ${hour.n}개`
+        : `${selection.region} · 이 시간의 예보 없음`;
+      const rows = [];
+      for (let offset = 0; offset < 3; offset++) {
+        const item = weather(selection, index + offset);
+        if (!item?.n) continue;
+        const row = document.createElement("tr");
+        for (const value of [times[index + offset].slice(11, 16), item.score ?? "–",
+          Number.isFinite(item.precip) ? `${item.precip.toFixed(1)} mm` : "–",
+          Number.isFinite(item.total) ? `${Math.round(item.total)}%` : "–"]) {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        }
+        rows.push(row);
+      }
+      table.tBodies[0].replaceChildren(...rows);
+      table.hidden = rows.length === 0;
+
+      const key = `${selection.id}:${day}:${Boolean(data)}`;
+      if (activeNight?.key !== key) {
+        renderSiteInfo(document.getElementById("site-notes"), selection.id);
+        const sky = nightSky(day, selection);
+        activeNight = { key, sky };
+        const windows = sky.moonless.map(([from, to]) => `${clockLabel.format(from)}–${clockLabel.format(to)}`);
+        document.getElementById("night-title").textContent = `${dayLabel.format(parseLocal(`${day}T18:00`))} 밤하늘`;
+        document.getElementById("moonless").textContent = `달 없는 어둠 · ${windows.join(", ") || "이 밤에는 없음"}`;
+        const forecast = data?.sites?.[selection.id]?.models ? scoreNight(data, selection, day) : null;
+        document.getElementById("weather-window").textContent = forecast?.windowStart
+          ? `예보 추천 · ${clockLabel.format(forecast.windowStart)}–${clockLabel.format(forecast.windowEnd)} · ${forecast.score}점`
+          : "예보 추천 · 자료 없음";
+        const list = recommendTargets(day, selection.lat, selection.lon).slice(0, 3);
+        const names = list.map((target) => `${target.name} · ${clockLabel.format(target.when)} · 고도 ${Math.round(target.alt)}°`);
+        document.getElementById("night-targets").replaceChildren(...(names.length ? names : ["이 밤의 관측 후보 없음"]).map((name) => {
+          const item = document.createElement("li");
+          item.textContent = name;
+          return item;
+        }));
+      }
+      drawNightSky(chart, activeNight.sky, time);
+    }
+
+    function show(index, fallback = validRequest ?? new Date()) {
+      const t = times[index] ? parseLocal(times[index]) : fallback;
+      d.setTime(t);
+      if (cloudModel) d.setClouds(data.grid.models[cloudModel][index], data.grid.lats, data.grid.lons);
+      d.setSites(SITES.map((site) => ({ ...site, score: weather(site, index)?.score ?? null })));
+      slider.setAttribute("aria-valuetext", timeLabel.format(t));
+      document.getElementById("when").textContent = timeLabel.format(t);
+      document.getElementById("moonTxt").textContent = `달 ${Math.round(SunCalc.getMoonIllumination(t).fraction * 100)}%`;
+      if (times[index]) datePicker.value = times[index].slice(0, 10);
+      siteDetail(index, t);
+    }
+
+    function selectDay(day) {
+      const evening = times.indexOf(`${day}T22:00`);
+      const i = evening >= 0 ? evening : times.findIndex((time) => time.startsWith(day));
+      if (i >= 0) { slider.value = i; show(i); }
+    }
+
+    const city = document.getElementById("city-view");
+    city.setAttribute("aria-pressed", String(cityLightsEnabled()));
+    document.getElementById("city-legend").hidden = !cityLightsEnabled();
+    d.setCityLights(cityLightsEnabled());
+    city.addEventListener("click", () => {
+      const enabled = city.getAttribute("aria-pressed") !== "true";
+      rememberCityLights(enabled);
+      city.setAttribute("aria-pressed", String(enabled));
+      document.getElementById("city-legend").hidden = !enabled;
+      d.setCityLights(enabled);
+    });
+    const clouds = document.getElementById("cloud-view");
+    clouds.addEventListener("click", () => {
+      const showClouds = clouds.getAttribute("aria-pressed") !== "true";
+      clouds.setAttribute("aria-pressed", String(showClouds));
+      d.setCloudVisibility(showClouds);
+    });
+    document.getElementById("reset-view").addEventListener("click", () => d.resetView());
+    document.getElementById("site-model").addEventListener("click", () => { if (selection) d.focusSite(selection); });
+    datePicker.addEventListener("change", () => selectDay(datePicker.value));
+    slider.addEventListener("input", () => show(+slider.value));
+    function openSite(site, button) {
+      selection = site;
+      opener = button;
+      siteDetail(+slider.value);
+      panel.hidden = false;
+      document.getElementById("site-title").focus();
+    }
+    document.getElementById("pins").addEventListener("click", (event) => {
+      const pin = event.target.closest("button[data-site]");
+      if (pin) openSite(SITES.find((site) => site.id === pin.dataset.site), pin);
+    });
+    function closeSite() {
+      if (!selection) return;
+      opener?.focus();
+      selection = undefined;
+      panel.hidden = true;
+      siteDetail(+slider.value);
+    }
+    document.getElementById("close-site").addEventListener("click", closeSite);
+    panel.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSite(); });
+
+    show(0);
+    const requestedSite = SITES.find(({ id }) => id === q.get("site"));
+    if (requestedSite) openSite(requestedSite);
+    d.start();
+    window.diorama = d;
+
+    try { data = await loadForecast(); } catch (error) { console.warn("예보 없음", error); }
+    const day = ymd(validRequest ?? new Date());
+    times = data?.times ?? Array.from({ length: 24 }, (_, hour) => `${day}T${String(hour).padStart(2, "0")}:00`);
+    cloudModel = GRID_MODELS.find((model) => data?.grid?.models?.[model]);
+    clouds.disabled = !cloudModel;
+    datePicker.replaceChildren(...[...new Set(times.map((time) => time.slice(0, 10)))].map((dayKey) =>
+      new Option(dayLabel.format(parseLocal(`${dayKey}T12:00`)), dayKey)));
+    datePicker.disabled = false;
+    slider.disabled = false;
+    slider.max = times.length - 1;
+    let initial = validRequest && times.findIndex((time) => +parseLocal(time) >= +validRequest);
+    if (initial == null || initial === false || initial < 0) initial = times.indexOf(`${day}T22:00`);
+    if (initial < 0) initial = times.findIndex((time) => time.endsWith("T22:00"));
+    slider.value = Math.max(0, initial);
+    note.textContent = [d.placeholder ? "임시 지형 표시 중" : "", data ? "" : "예보를 가져오지 못해 달과 지형을 표시합니다."].filter(Boolean).join(" · ");
+    show(+slider.value);
+  </script>
+</body>
+</html>
