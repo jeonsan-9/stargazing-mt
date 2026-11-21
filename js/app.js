@@ -10,7 +10,7 @@ const EXAG = 3; // 지형 과장 배율 (한반도 산은 낮아서 3배로 키�
 const CLOUD_ALT = 2500; // 구름층 고도 (m, 과장 전)
 
 // 지도 색감 테마. ?theme=glade 는 아늑한 미니어처(디오라마) 밤 풍경
-const THEME = document.documentElement.dataset.theme || "cute";
+const THEME = document.documentElement.dataset.theme || "glade";
 const GLADE = THEME.startsWith("glade");
 const PAL = GLADE
   ? {
@@ -763,7 +763,8 @@ function cell(v, cls = "", style = "", title = "") {
 function cloudCell(v) {
   if (v == null) return cell("·", "na");
   const a = (Math.min(100, v) / 100) * 0.85;
-  return cell(Math.round(v), "c", `background:rgba(225,232,245,${a.toFixed(2)});color:${v > 55 ? "#0b1020" : "#e6edf3"}`);
+  // 색은 테마 CSS 변수로 (밝은 종이 테마에서도 읽히게)
+  return cell(Math.round(v), "c", `background:rgba(var(--cloud-rgb, 225, 232, 245), ${a.toFixed(2)});color:${v > 55 ? "var(--cloud-hi-text, #0b1020)" : "var(--cloud-lo-text, #e6edf3)"}`);
 }
 
 function warnCell(v, fmt, bad, worse) {
