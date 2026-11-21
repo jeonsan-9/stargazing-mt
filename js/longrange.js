@@ -3,6 +3,8 @@
 
 /* global SunCalc */
 import { scoreNight, scoreColor, addDays, ymd } from "./score.js";
+import { academic, conflict } from "./calendar.js";
+import { renderRetro } from "./retro.js";
 
 const KST = "+09:00";
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
@@ -73,14 +75,21 @@ function badge(score, kind = "예보") {
 }
 
 // ---------- 학기 ----------
+// MT는 몇 달 전에 정하므로 예보는 쓰지 않고 10년 기록(비·구름) + 월령만으로 순위를 매김
 export function semesters(todayYmd) {
   const [y, m] = todayYmd.split("-").map(Number);
-  const s1 = (yy) => ({ name: `${yy}년 1학기`, start: `${yy}-03-02`, end: `${yy}-06-20` });
-  const s2 = (yy) => ({ name: `${yy}년 2학기`, start: `${yy}-09-01`, end: `${yy}-12-20` });
-  if (m <= 6) return [s1(y), s2(y)];
-  if (m <= 12 && todayYmd <= `${y}-12-20`) return [s2(y), s1(y + 1)];
-  return [s1(y + 1), s2(y + 1)];
+  const mk = (yy, half) => ({ ...academic(yy, half), name: `${yy}년 ${half}학기` });
+  const list = m <= 6 ? [mk(y, 1), mk(y, 2)] : [mk(y, 2), mk(y + 1, 1)];
+  return list.filter((s) => s.end >= todayYmd);
 }
+
+function odds(good) {
+  if (good >= 0.45) return ["높음", "hi"];
+  if (good >= 0.3) return ["보통", "mid"];
+  return ["낮음", "lo"];
+}
+
+let retroHTML = null;
 
 export function renderSemester(box, data, site, todayYmd, onPick) {
   const html = semesters(todayYmd)
@@ -88,38 +97,56 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
       const nights = [];
       for (let d = sem.start; d <= sem.end; d = addDays(d, 1)) {
         const wd = dateOf(d).getUTCDay();
-        if ((wd === 5 || wd === 6) && d >= todayYmd) nights.push(nightOutlook(data, site, d));
+        if ((wd === 5 || wd === 6) && d > todayYmd) {
+          const n = nightOutlook(data, site, d, true);
+          n.blocked = conflict(d, sem);
+          nights.push(n);
+        }
       }
       if (!nights.length) return "";
-      const top = [...nights].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5);
+      const top = nights.filter((n) => !n.blocked).sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5);
       const strip = nights
         .map((n) => {
-          const [r, g, b] = scoreColor(n.kind === "통계" ? n.score * 1.8 : n.score);
+          const [r, g, b] = scoreColor(n.score * 1.8);
           const d = dateOf(n.ymd);
-          return `<button class="strip-cell${top.includes(n) ? " top" : ""}" data-ymd="${n.ymd}" title="${d.getUTCMonth() + 1}/${d.getUTCDate()} (${WD[d.getUTCDay()]}) · ${n.kind === "통계" ? `좋은 밤 ${n.score}%${n.rain != null ? ` · 비 ${Math.round(n.rain * 100)}%` : ""}` : `${n.score}점 (예보)`}" style="background:rgba(${r},${g},${b},.9)"></button>`;
+          const label = `${d.getUTCMonth() + 1}/${d.getUTCDate()} (${WD[d.getUTCDay()]})`;
+          return n.blocked
+            ? `<button class="strip-cell x" data-ymd="${n.ymd}" title="${label} · ${n.blocked}"></button>`
+            : `<button class="strip-cell${top.includes(n) ? " top" : ""}" data-ymd="${n.ymd}" title="${label} · 좋은 밤 ${n.score}%${n.rain != null ? ` · 비 ${Math.round(n.rain * 100)}%` : ""}" style="background:rgba(${r},${g},${b},.9)"></button>`;
         })
         .join("");
       const list = top
         .map((n, k) => {
           const d = dateOf(n.ymd);
-          const why =
-            n.kind === "예보"
-              ? "모델 예보 기준"
-              : `${n.rain != null ? `비 올 확률 ${Math.round(n.rain * 100)}% · ` : ""}맑은 밤 ${Math.round(n.clear * 100)}% · 달 없는 시간 ${Math.round(n.dark * 100)}%`;
+          const good = n.good ?? n.clear ?? 0;
+          const [o, oc] = odds(good);
+          const why = `${n.rain != null ? `비 올 확률 ${Math.round(n.rain * 100)}% · ` : ""}10년 중 약 ${Math.round(good * 10)}번 맑고 비 없음 · 달 없는 시간 ${Math.round(n.dark * 100)}%`;
           return `<button class="pick" data-ymd="${n.ymd}">
             <span class="rank">${k + 1}</span>
-            <span class="pd"><b>${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WD[d.getUTCDay()]}) 밤</b><small>${why}</small></span>
-            ${moonIcon(n.moon.phase, 16)}${badge(n.score, n.kind)}</button>`;
+            <span class="pd"><b>${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WD[d.getUTCDay()]}) 밤 <i class="odds ${oc}">성공 확률 ${o}</i></b><small>${why}</small></span>
+            ${moonIcon(n.moon.phase, 16)}${badge(n.score, "통계")}</button>`;
         })
         .join("");
-      return `<section class="sem"><h3>${sem.name} MT 추천 주말</h3>
+      const avoid = sem.avoid
+        .map(([a, b, why]) => `<span class="chip">${why} ${a.slice(5).replace("-", "/")}~${b.slice(5).replace("-", "/")}</span>`)
+        .join("");
+      return `<section class="sem"><h3>${sem.name} MT 날짜 미리 정하기</h3>
+        <p class="lead">예보 없이 영천의 10년 기록(비·구름)과 달만으로 매긴 순위예요. 시험기간과 연휴는 뺐어요.</p>
         <div class="strip">${strip}</div>
-        <div class="strip-legend"><span>${(sem.start > todayYmd ? sem.start : todayYmd).slice(5).replace("-", "/")}</span><span>금·토 밤</span><span>${sem.end.slice(5).replace("-", "/")}</span></div>
-        ${list}</section>`;
+        <div class="strip-legend"><span>${(sem.start > todayYmd ? sem.start : todayYmd).slice(5).replace("-", "/")}</span><span>금·토 밤 · 빗금 = 제외</span><span>${sem.end.slice(5).replace("-", "/")}</span></div>
+        ${list}
+        <div class="chips">${avoid}${sem.guessed ? '<span class="chip soft">학사일정 추정치</span>' : ""}</div></section>`;
     })
     .join("");
-  box.innerHTML = html + note(data);
+  box.innerHTML =
+    html +
+    `<section class="sem"><h3>지난 MT 돌아보기</h3><div id="retroBox">${retroHTML ?? ""}</div></section>` +
+    note(data);
   box.querySelectorAll("[data-ymd]").forEach((el) => (el.onclick = () => onPick(el.dataset.ymd)));
+  if (retroHTML == null) {
+    const rb = box.querySelector("#retroBox");
+    renderRetro(rb, site).then(() => (retroHTML = rb.innerHTML));
+  }
 }
 
 // ---------- 월 ----------
