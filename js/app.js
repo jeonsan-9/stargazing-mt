@@ -4,8 +4,8 @@ import { MODELS, GRID_MODELS, modelLabel } from "./models.js";
 import { loadForecast } from "./data.js";
 import { scoreNight, scoreColor, moonInfo, darkWindow, parseLocal, ymd, addDays } from "./score.js";
 
-const EXAG = 1.5; // 지형 과장 배율
-const CLOUD_ALT = 4500; // 구름층 고도 (m)
+const EXAG = 3; // 지형 과장 배율 (한반도 산은 낮아서 3배로 키워야 높낮이가 보임)
+const CLOUD_ALT = 2500; // 구름층 고도 (m, 과장 전)
 
 const state = {
   data: null,
@@ -28,10 +28,10 @@ const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const map = new maplibregl.Map({
   container: "map",
   style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-  center: [128.7, 36.0],
-  zoom: 7.2,
-  pitch: 55,
-  bearing: -15,
+  center: [128.9, 36.0],
+  zoom: 8.6,
+  pitch: 62,
+  bearing: -20,
   maxPitch: 75,
   attributionControl: { compact: true },
 });
@@ -63,13 +63,23 @@ map.on("load", () => {
       type: "hillshade",
       source: "dem-hs",
       paint: {
-        "hillshade-exaggeration": 0.45,
+        "hillshade-exaggeration": 1,
         "hillshade-shadow-color": "#000000",
-        "hillshade-highlight-color": "#3a4a6a",
+        "hillshade-highlight-color": "#b8c8f0",
+        "hillshade-accent-color": "#1b2440",
+        "hillshade-illumination-direction": 315,
       },
     },
     firstSymbol
   );
+  map.setSky({
+    "sky-color": "#0b1020",
+    "horizon-color": "#22305a",
+    "fog-color": "#0b1020",
+    "sky-horizon-blend": 0.6,
+    "horizon-fog-blend": 0.6,
+    "fog-ground-blend": 0.4,
+  });
   apply3D();
 });
 
@@ -77,7 +87,7 @@ function apply3D() {
   if (!map.getSource("dem")) return;
   if (state.is3D) {
     map.setTerrain({ source: "dem", exaggeration: EXAG });
-    map.easeTo({ pitch: 55, bearing: -15, duration: 800 });
+    map.easeTo({ pitch: 62, bearing: -20, duration: 800 });
   } else {
     map.setTerrain(null);
     map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
@@ -86,7 +96,8 @@ function apply3D() {
 }
 
 // ---------- 구름 이미지 ----------
-const cloudCanvas = document.createElement("canvas");
+// deck.gl은 image 객체가 바뀌어야 텍스처를 다시 올리므로, 시각마다 새 캔버스를 만들어 캐시함
+const cloudCache = new Map();
 let cloudKey = "";
 
 function cloudImage() {
@@ -94,7 +105,10 @@ function cloudImage() {
   const field = g?.models?.[state.cloudModel]?.[state.hourIdx];
   if (!field) return null;
   const key = `${state.cloudModel}:${state.hourIdx}`;
-  if (key === cloudKey) return cloudCanvas;
+  if (cloudCache.has(key)) {
+    cloudKey = key;
+    return cloudCache.get(key);
+  }
   const nLat = g.lats.length;
   const nLon = g.lons.length;
   const small = document.createElement("canvas");
@@ -109,18 +123,19 @@ function cloudImage() {
       img.data[p] = 235;
       img.data[p + 1] = 240;
       img.data[p + 2] = 250;
-      img.data[p + 3] = v == null ? 0 : Math.round(Math.pow(v / 100, 1.2) * 210);
+      img.data[p + 3] = v == null ? 0 : Math.round(Math.pow(v / 100, 1.3) * 235);
     }
   }
   ctx.putImageData(img, 0, 0);
+  const cloudCanvas = document.createElement("canvas");
   cloudCanvas.width = nLon * 24;
   cloudCanvas.height = nLat * 24;
   const big = cloudCanvas.getContext("2d");
-  big.clearRect(0, 0, cloudCanvas.width, cloudCanvas.height);
   big.imageSmoothingEnabled = true;
   big.imageSmoothingQuality = "high";
   big.drawImage(small, 0, 0, cloudCanvas.width, cloudCanvas.height);
   cloudKey = key;
+  cloudCache.set(key, cloudCanvas);
   return cloudCanvas;
 }
 
@@ -156,11 +171,10 @@ function renderLayers() {
     if (image) {
       layers.push(
         new deck.BitmapLayer({
-          id: "cloud",
+          id: "cloud-" + cloudKey,
           image,
           bounds: cloudBounds(state.is3D ? CLOUD_ALT * EXAG : 0),
-          opacity: 0.85,
-          updateTriggers: { image: cloudKey },
+          opacity: 0.9,
           parameters: { depthTest: false },
         })
       );
@@ -309,7 +323,8 @@ function renderHourSlider() {
 function updateHourLabel() {
   const t = parseLocal(state.data.times[state.hourIdx]);
   const has = !!state.data.grid?.models?.[state.cloudModel]?.[state.hourIdx];
-  $("hourLabel").textContent = `${t.getMonth() + 1}/${t.getDate()} ${fmtTime(t)}${has ? "" : " (구름 자료 없음)"}`;
+  const md = t.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" });
+  $("hourLabel").textContent = `${md} ${fmtTime(t)}${has ? "" : " (구름 자료 없음)"}`;
 }
 
 function renderModelSelect() {
@@ -405,7 +420,7 @@ function selectSite(id, fly) {
   document.body.classList.add("detail-open");
   if (fly) {
     const s = SITES.find((x) => x.id === id);
-    map.flyTo({ center: [s.lon, s.lat], zoom: 9.5, pitch: state.is3D ? 60 : 0, duration: 1200 });
+    map.flyTo({ center: [s.lon, s.lat], zoom: 9.5, pitch: state.is3D ? 65 : 0, duration: 1200 });
   }
 }
 
@@ -434,6 +449,21 @@ $("toggleExtra").onchange = (e) => {
   renderList();
   renderLayers();
 };
+let playTimer = null;
+$("play").onclick = () => {
+  if (playTimer) {
+    clearInterval(playTimer);
+    playTimer = null;
+    $("play").textContent = "▶";
+    return;
+  }
+  $("play").textContent = "❚❚";
+  playTimer = setInterval(() => {
+    const slider = $("hour");
+    slider.value = (+slider.value + 1) % (+slider.max + 1);
+    slider.oninput();
+  }, 700);
+};
 $("closeDetail").onclick = () => document.body.classList.remove("detail-open");
 
 // ---------- 시작 ----------
@@ -451,4 +481,5 @@ $("closeDetail").onclick = () => document.body.classList.remove("detail-open");
   renderModelSelect();
   setNight(nightsAvailable()[0]);
   window.__app = state; // 디버깅용
+  window.__map = map;
 })();
