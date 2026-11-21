@@ -5,6 +5,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { project, lonLatToKm, calibrate, fitBox, LON0, LAT0 } from "./geo.js";
+import { moonLighting } from "./moon.js";
 
 const DRACO = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/";
 
@@ -220,23 +221,25 @@ export class Diorama {
     this.moon.style.top = `${26 - 17 * THREE.MathUtils.clamp(altitude / 72, 0, 1)}%`;
     this.moon.toggleAttribute("data-below-horizon", altitude < 0);
     const direction = directions[Math.round(bearing / 45) % 8];
-    this.moon.querySelector("span").textContent = altitude < 0 ? `${direction} · 지평선 아래` : `${direction} ${Math.round(bearing)}° · 고도 ${Math.round(altitude)}°`;
+    const light = moonLighting(position, illumination);
+    const phase = `${light.name} ${Math.round(illumination.fraction * 100)}%`;
+    this.moon.querySelector("span").textContent = altitude < 0
+      ? `${phase} · 지평선 아래`
+      : `${phase} · ${direction} ${Math.round(bearing) % 360}° · 고도 ${Math.round(altitude)}°`;
     const canvas = this.moon.querySelector("canvas");
+    canvas.setAttribute("aria-label", `달의 위상 ${phase}`);
     const ctx = canvas.getContext("2d");
     const n = canvas.width;
     const pixels = ctx.createImageData(n, n);
-    const lightDepth = 2 * illumination.fraction - 1;
-    const limb = illumination.angle - position.parallacticAngle;
-    const lightSide = Math.sqrt(Math.max(0, 1 - lightDepth ** 2));
-    const lightX = -Math.sin(limb) * lightSide, lightY = -Math.cos(limb) * lightSide;
     const craters = [[-0.22, 0.30, 0.093], [0.29, 0.18, 0.11], [0.51, -0.28, 0.078],
                      [-0.49, -0.31, 0.064], [0.07, 0.63, 0.071]];
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
       const u = (x - n / 2) / (n * 0.43), v = (y - n / 2) / (n * 0.43);
       const r2 = u * u + v * v;
       if (r2 >= 1) continue;
-      const sun = u * lightX + v * lightY + Math.sqrt(1 - r2) * lightDepth;
-      const light = THREE.MathUtils.smoothstep(sun, -0.02, 0.10) * (0.77 + 0.23 * Math.max(0, sun));
+      const sun = u * light.x + v * light.y + Math.sqrt(1 - r2) * light.z;
+      const lit = THREE.MathUtils.smoothstep(sun, -0.017, 0.017);
+      const diffuse = lit * (0.60 + 0.40 * Math.sqrt(Math.max(0, sun)));
       const maria = -0.10 * Math.exp(-12 * (u + 0.22) ** 2 - 5 * (v + 0.27) ** 2)
         - 0.095 * Math.exp(-10 * (u - 0.24) ** 2 - 18 * (v + 0.09) ** 2)
         - 0.07 * Math.exp(-17 * (u + 0.09) ** 2 - 26 * (v - 0.43) ** 2);
@@ -245,10 +248,10 @@ export class Diorama {
         const d = Math.hypot(u - cx, v - cy) / radius;
         if (d < 1.45) relief += 0.09 * Math.exp(-23 * (d - 1) ** 2) - 0.07 * Math.exp(-3 * d * d);
       }
-      const tone = Math.max(0, light * (1.0 + 0.10 * (1 - r2) + maria + relief));
+      const tone = Math.max(0, diffuse * (1.0 + 0.08 * (1 - r2) + maria + relief));
       const i = (y * n + x) * 4;
-      pixels.data.set([46 + 208 * tone, 41 + 193 * tone, 76 + 129 * tone,
-        255 * THREE.MathUtils.clamp((1 - r2) * n / 4, 0, 1)], i);
+      pixels.data.set([38 + 215 * tone, 44 + 199 * tone, 72 + 146 * tone,
+        (75 + 180 * lit) * THREE.MathUtils.clamp((1 - r2) * n / 4, 0, 1)], i);
     }
     ctx.putImageData(pixels, 0, 0);
   }
