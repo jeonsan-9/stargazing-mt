@@ -35,3 +35,4 @@ summary { cursor: pointer; width: max-content; }
 @media (max-width: 540px) { #sky-help { top: auto; bottom: 183px; right: 12px; max-width: calc(100% - 24px); } }
 /* 좁은 화면에선 조작판에 가려지므로 화면에서만 숨기고 스크린리더 설명은 유지 */
 @media (max-width: 540px) { #sky-help { clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; padding: 0; } }
+#gyro[aria-pressed="true"] { background: #6d8f6f; border-color: #a9d3a5; color: #fff; }
