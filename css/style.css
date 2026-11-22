@@ -263,3 +263,22 @@ html[data-map="diorama"] #diorama-stage { display: block; position: fixed; inset
 @media (max-width: 760px) {
   html[data-map="diorama"] #diorama-stage { inset: 0 0 calc(36dvh + 145px); }
 }
+
+/* ---------- 천문 현상 ---------- */
+.strip-cell.ev { position: relative; }
+.strip-cell.ev::after { content: ""; position: absolute; left: 50%; top: -5px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--accent-2, #f3c580); }
+.ev-tag { display: block; margin-top: 2px; color: var(--accent-2, #c98a3b); font-weight: 700; }
+.ev-head { margin: 16px 0 6px; font-size: 13px; }
+.ev-head small { font-weight: 400; color: var(--muted); }
+.events { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.events .ev { display: grid; grid-template-columns: 26px 1fr; gap: 2px 8px; align-items: start; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line, #ffffff22); cursor: pointer; }
+.events .ev:hover, .events .ev:focus-visible { background: rgba(255,255,255,.06); outline: none; }
+.events .ev-ic { font-size: 18px; line-height: 1.2; grid-row: span 2; }
+.events .ev-tx b { display: block; font-size: 13px; }
+.events .ev-tx small { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.events .ev-moon { grid-column: 2; font-size: 11.5px; font-weight: 700; }
+.events .ev.good .ev-moon { color: #4f8a5b; }
+.events .ev.mid .ev-moon { color: #b07a2a; }
+.events .ev.bad .ev-moon { color: #b0503d; }
+.events .ev.neutral .ev-moon { color: var(--muted); font-weight: 600; }
+.cal .ce { position: absolute; top: 2px; left: 3px; font-size: 9px; line-height: 1; }

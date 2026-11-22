@@ -24,7 +24,7 @@ const ELEM = {
   neptune: [[30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574], [0.00026291, 0.00005105, 0.00035372, 218.45945325, -0.32241464, -0.00508664]],
 };
 
-const PLANETS = [
+export const PLANETS = [
   { id: "venus", name: "금성", H: -4.4, w: 0.85, tip: "초저녁·새벽 낮은 하늘의 가장 밝은 별. 망원경으로 위상(초승달 모양)이 보여요" },
   { id: "jupiter", name: "목성", H: -9.4, w: 1, tip: "쌍안경으로도 갈릴레이 위성 4개, 망원경이면 줄무늬까지" },
   { id: "saturn", name: "토성", H: -8.9, w: 1, tip: "작은 망원경으로도 고리가 보이는 최고의 대상" },
@@ -58,7 +58,7 @@ function helio(id, T) {
   ];
 }
 
-function planetRaDec(p, date) {
+export function planetRaDec(p, date) {
   const T = (julian(date) - 2451545) / 36525;
   const P = helio(p.id, T);
   const E = helio("earth", T);
@@ -75,6 +75,16 @@ function planetRaDec(p, date) {
   const phase = Math.acos(Math.max(-1, Math.min(1, cosPh))) * DEG;
   const mag = p.H + 5 * Math.log10(rr * delta) + 0.02 * phase;
   return { ra: Math.atan2(y, x) * DEG / 15, dec: Math.asin(z / delta) * DEG, mag, dist: delta };
+}
+
+// 태양과 행성 사이 각거리(이각, °). 지구에서 본 행성 방향과 태양 방향의 사잇각
+export function elongation(id, date) {
+  const T = (julian(date) - 2451545) / 36525;
+  const P = helio(id, T);
+  const E = helio("earth", T);
+  const g = [P[0] - E[0], P[1] - E[1], P[2] - E[2]];
+  const dot = -(g[0] * E[0] + g[1] * E[1] + g[2] * E[2]) / (Math.hypot(...g) * Math.hypot(...E));
+  return Math.acos(Math.max(-1, Math.min(1, dot))) * DEG;
 }
 
 // ---------- 딥스카이 ----------
@@ -112,7 +122,7 @@ const DSO = [
 
 // ---------- 유성우 ----------
 // [이름, 극대(월, 일), 활동 반경(일), ZHR, 복사점 적경(시), 적위(°)]
-const SHOWERS = [
+export const SHOWERS = [
   ["사분의자리 유성우", 1, 3, 2, 110, 15.33, 49.5],
   ["거문고자리 유성우", 4, 22, 2, 18, 18.07, 34],
   ["물병자리 에타 유성우", 5, 6, 3, 50, 22.47, -1],
