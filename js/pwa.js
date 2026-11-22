@@ -113,11 +113,11 @@ function pageHref(file) {
   return `./${file}${q.toString() ? `?${q}` : ""}`;
 }
 
-function menuHTML() {
+function menuHTML(noPages = false) {
   return `
     <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
-      <div class="sheet-head"><h2 id="sheetTitle">메뉴</h2><button type="button" class="sheet-x" aria-label="닫기">✕</button></div>
-      <nav class="sheet-pages" aria-label="페이지">
+      <div class="sheet-head"><h2 id="sheetTitle">${noPages ? "더보기" : "메뉴"}</h2><button type="button" class="sheet-x" aria-label="닫기">✕</button></div>
+      <nav class="sheet-pages" aria-label="페이지"${noPages ? " hidden" : ""}>
         ${PAGES.map(([file, icon, name, sub]) => `<a href="${esc(pageHref(file))}"${file === here ? ' aria-current="page"' : ""}>
           <span class="ic" aria-hidden="true">${icon}</span><b>${name}</b><small>${sub}</small></a>`).join("")}
       </nav>
@@ -168,7 +168,7 @@ function reportPayload(form) {
 
 function openSheet(kind = "menu", options) {
   lastFocus = document.activeElement;
-  sheet.innerHTML = `<div class="sheet-backdrop"></div>${kind === "report" ? reportHTML(options) : menuHTML()}`;
+  sheet.innerHTML = `<div class="sheet-backdrop"></div>${kind === "report" ? reportHTML(options) : menuHTML(kind === "more")}`;
   sheet.hidden = false;
   document.documentElement.classList.add("sheet-open");
   sheet.querySelector(".sheet-backdrop").onclick = closeSheet;
@@ -222,6 +222,25 @@ function net() {
   bar.querySelector("#netBadge").hidden = navigator.onLine;
 }
 
+// ---------- 페이지 탭바: 휴대폰은 화면 아래, PC는 오른쪽 위 알약 ----------
+const SHORT = { "index.html": "지도", "observe.html": "계획", "sky.html": "하늘", "diorama.html": "입체" };
+
+function mountTabs() {
+  root.classList.add("menu-a");
+  const nav = document.createElement("nav");
+  nav.id = "aaaTabs";
+  nav.setAttribute("aria-label", "페이지");
+  nav.innerHTML = `${PAGES.map(([file, icon]) => `<a class="tab" href="${esc(pageHref(file))}"${file === here ? ' aria-current="page"' : ""}>
+    <span class="ic" aria-hidden="true">${icon}</span><span class="tx">${SHORT[file]}</span></a>`).join("")}
+    <button type="button" class="tab more" aria-haspopup="dialog" aria-controls="aaaSheet"><span class="ic" aria-hidden="true">⋯</span><span class="tx">더보기</span></button>`;
+  // 누르기 직전에 링크를 다시 계산해서 지금 고른 관측지·시각을 들고 감
+  const refresh = () => nav.querySelectorAll("a").forEach((link, i) => { link.href = pageHref(PAGES[i][0]); });
+  nav.addEventListener("pointerdown", refresh, true);
+  nav.addEventListener("focusin", refresh);
+  nav.querySelector(".more").onclick = () => openSheet("more");
+  document.body.append(nav);
+}
+
 function mount() {
   const slot = document.querySelector("[data-pwa-slot]");
   if (slot) {
@@ -230,6 +249,7 @@ function mount() {
   }
   document.body.append(sheet, veil);
   bar.querySelector("#menuBtn").onclick = () => openSheet();
+  mountTabs();
   if (location.hash === "#report") openSheet("report");
   // 페이지 어디서든 data-report 버튼으로 신고 시트를 엶 (예: 관측지 상세의 "정보 고치기")
   document.addEventListener("click", (e) => {
