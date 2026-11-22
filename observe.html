@@ -99,6 +99,19 @@
         </figure>
         <p id="frame-result" class="result" aria-live="polite"></p>
         <p id="target-size" class="hint"></p>
+        <details id="exposure-panel" open>
+          <summary>노출 계산기 · 별이 흐르지 않는 최대 시간</summary>
+          <div class="fields">
+            <label>조리개 (f/)<input id="aperture" type="number" min="0.7" max="32" step="0.1" value="2.8" inputmode="decimal"></label>
+            <label>화소 크기 (µm)<input id="pixel" type="number" min="0.5" max="20" step="0.01" value="3.9" inputmode="decimal"></label>
+          </div>
+          <dl class="metrics exposure">
+            <div><dt>NPF 규칙</dt><dd id="npf"></dd></div>
+            <div><dt>500 규칙</dt><dd id="rule500"></dd></div>
+            <div><dt>대상 적위</dt><dd id="exp-dec"></dd></div>
+          </dl>
+          <p id="exposure-note" class="hint"></p>
+        </details>
         <details>
           <summary>대상 각크기 직접 입력</summary>
           <div class="fields">
