@@ -113,11 +113,11 @@ function pageHref(file) {
   return `./${file}${q.toString() ? `?${q}` : ""}`;
 }
 
-function menuHTML() {
+function menuHTML(noPages = false) {
   return `
     <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
       <div class="sheet-head"><h2 id="sheetTitle">메뉴</h2><button type="button" class="sheet-x" aria-label="닫기">✕</button></div>
-      <nav class="sheet-pages" aria-label="페이지">
+      <nav class="sheet-pages" aria-label="페이지"${noPages ? " hidden" : ""}>
         ${PAGES.map(([file, icon, name, sub]) => `<a href="${esc(pageHref(file))}"${file === here ? ' aria-current="page"' : ""}>
           <span class="ic" aria-hidden="true">${icon}</span><b>${name}</b><small>${sub}</small></a>`).join("")}
       </nav>
@@ -168,7 +168,7 @@ function reportPayload(form) {
 
 function openSheet(kind = "menu", options) {
   lastFocus = document.activeElement;
-  sheet.innerHTML = `<div class="sheet-backdrop"></div>${kind === "report" ? reportHTML(options) : menuHTML()}`;
+  sheet.innerHTML = `<div class="sheet-backdrop"></div>${kind === "report" ? reportHTML(options) : menuHTML(kind === "more")}`;
   sheet.hidden = false;
   document.documentElement.classList.add("sheet-open");
   sheet.querySelector(".sheet-backdrop").onclick = closeSheet;
@@ -222,6 +222,73 @@ function net() {
   bar.querySelector("#netBadge").hidden = navigator.onLine;
 }
 
+// ---------- 메뉴 시안 (A 아래 탭바 · B 머리말 탭 · C 별 버튼). ?menu=a|b|c 로 미리 보기 ----------
+const STYLE_KEY = "aaa-menu-style";
+const SHORT = { "index.html": "지도", "observe.html": "계획", "sky.html": "하늘", "diorama.html": "입체" };
+function menuStyle() {
+  const q = new URLSearchParams(location.search).get("menu");
+  if (q && /^[abc]$/.test(q)) { write(STYLE_KEY, q); return q; }
+  const saved = read(STYLE_KEY);
+  return saved && /^[abc]$/.test(saved) ? saved : "";
+}
+
+function pageLinks(cls) {
+  return PAGES.map(([file, icon]) => `<a class="${cls}" href="${esc(pageHref(file))}"${file === here ? ' aria-current="page"' : ""}>
+    <span class="ic" aria-hidden="true">${icon}</span><span class="tx">${SHORT[file]}</span></a>`).join("");
+}
+
+function mountStyle(style) {
+  root.classList.add(`menu-${style}`);
+  const refresh = (box, cls) => box.querySelectorAll("a").forEach((a, i) => { a.href = pageHref(PAGES[i][0]); });
+  if (style === "a") {
+    // 휴대폰: 화면 아래 탭바, PC: 오른쪽 위에 떠 있는 알약 모양
+    const nav = document.createElement("nav");
+    nav.id = "aaaTabs";
+    nav.setAttribute("aria-label", "페이지");
+    nav.innerHTML = `${pageLinks("tab")}<button type="button" class="tab more" aria-haspopup="dialog"><span class="ic" aria-hidden="true">⋯</span><span class="tx">더보기</span></button>`;
+    nav.querySelector(".more").onclick = () => openSheet("more");
+    nav.addEventListener("pointerenter", () => refresh(nav), true);
+    nav.addEventListener("focusin", () => refresh(nav));
+    document.body.append(nav);
+  } else if (style === "b") {
+    // 머리말 안에 책갈피처럼 생긴 탭 한 줄 + 작은 동그라미 버튼
+    const seg = document.createElement("nav");
+    seg.id = "aaaSeg";
+    seg.setAttribute("aria-label", "페이지");
+    seg.innerHTML = pageLinks("seg");
+    seg.addEventListener("pointerenter", () => refresh(seg), true);
+    seg.addEventListener("focusin", () => refresh(seg));
+    bar.prepend(seg);
+    const report = document.createElement("button");
+    report.type = "button";
+    report.className = "round";
+    report.title = "신고·제안";
+    report.setAttribute("aria-label", "신고·제안");
+    report.textContent = "📮";
+    report.onclick = () => openSheet("report");
+    bar.querySelector("#nightBtn").after(report);
+  } else if (style === "c") {
+    // 오른쪽 위 마스코트 별 버튼 → 작은 말풍선 메뉴
+    const fab = document.createElement("div");
+    fab.id = "aaaFab";
+    fab.innerHTML = `<button type="button" class="star" aria-expanded="false" aria-controls="aaaPop" aria-label="메뉴">✦</button>
+      <div id="aaaPop" hidden><nav aria-label="페이지">${PAGES.map(([file, icon, name, sub]) => `<a href="${esc(pageHref(file))}"${file === here ? ' aria-current="page"' : ""}><span aria-hidden="true">${icon}</span><b>${name}</b><small>${sub}</small></a>`).join("")}</nav>
+      <div class="pop-row"><button type="button" data-act="night">🔴 야간</button><button type="button" data-act="report">📮 신고</button></div></div>`;
+    const btn = fab.querySelector(".star"), pop = fab.querySelector("#aaaPop");
+    const toggle = (open) => {
+      pop.hidden = !open;
+      btn.setAttribute("aria-expanded", String(open));
+      if (open) pop.querySelectorAll("a").forEach((a, i) => { a.href = pageHref(PAGES[i][0]); });
+    };
+    btn.onclick = () => toggle(pop.hidden);
+    pop.querySelector('[data-act="night"]').onclick = () => { setNight(!root.classList.contains("night-red")); toggle(false); };
+    pop.querySelector('[data-act="report"]').onclick = () => { toggle(false); openSheet("report"); };
+    document.addEventListener("pointerdown", (e) => { if (!fab.contains(e.target)) toggle(false); });
+    fab.addEventListener("keydown", (e) => { if (e.key === "Escape") { toggle(false); btn.focus(); } });
+    document.body.append(fab);
+  }
+}
+
 function mount() {
   const slot = document.querySelector("[data-pwa-slot]");
   if (slot) {
@@ -230,6 +297,8 @@ function mount() {
   }
   document.body.append(sheet, veil);
   bar.querySelector("#menuBtn").onclick = () => openSheet();
+  const style = menuStyle();
+  if (style) mountStyle(style);
   if (location.hash === "#report") openSheet("report");
   // 페이지 어디서든 data-report 버튼으로 신고 시트를 엶 (예: 관측지 상세의 "정보 고치기")
   document.addEventListener("click", (e) => {

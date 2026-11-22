@@ -151,3 +151,71 @@ html.sheet-open, html.sheet-open body { overflow: hidden; }
 /* 머리말 안에서는 메뉴·야간만 두고 설치는 메뉴 시트로 */
 #pwaBar.inline #installBtn { display: none; }
 #menuBtn { background: #5f4a73 !important; color: #fff8e9 !important; border-color: #5f4a73 !important; box-shadow: 0 2px 0 #3c2e4a !important; }
+
+/* ================= 메뉴 시안 ================= */
+#aaaSheet [hidden] { display: none !important; }
+html.menu-a #menuBtn, html.menu-b #menuBtn, html.menu-c #menuBtn { display: none; }
+
+/* --- A: 아래 탭바 (휴대폰) / 오른쪽 위 알약 (PC) --- */
+#aaaTabs { position: fixed; z-index: 2147482980; display: flex; gap: 2px; padding: 5px;
+  background: #fff8e9f2; border: 1px solid #d8ccb4; box-shadow: 0 6px 24px #120f1e55, inset 0 1px 0 #fff;
+  backdrop-filter: blur(10px); font: 600 11px/1.1 "Pretendard Variable", "Gowun Dodum", system-ui, sans-serif; }
+#aaaTabs .tab { display: grid; justify-items: center; gap: 3px; min-width: 56px; padding: 6px 8px 5px; border: 0; border-radius: 15px;
+  background: none; color: #5c5363; text-decoration: none; font: inherit; cursor: pointer; }
+#aaaTabs .ic { font-size: 19px; line-height: 1; filter: saturate(.85); }
+#aaaTabs .tab[aria-current="page"] { background: #e3ecd9; color: #2f4a33; box-shadow: inset 0 0 0 1px #a8c4a2; }
+#aaaTabs .tab:focus-visible { outline: 2px solid #48674f; outline-offset: 1px; }
+@media (max-width: 760px) {
+  #aaaTabs { left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); justify-content: space-around; border-radius: 22px; }
+  #aaaTabs .tab { flex: 1; }
+  html.menu-a { --dock-bottom: calc(max(8px, env(safe-area-inset-bottom)) + 70px); }
+  html.menu-a .controls { bottom: calc(max(13px, env(safe-area-inset-bottom)) + 70px); }
+  html.menu-a #time { bottom: 88px; }
+  html.menu-a body > main { padding-bottom: 90px; }
+}
+@media (min-width: 761px) {
+  #aaaTabs { top: 14px; right: 14px; border-radius: 999px; }
+  #aaaTabs .tab { grid-auto-flow: column; gap: 6px; padding: 7px 12px; border-radius: 999px; font-size: 13px; }
+  #aaaTabs .ic { font-size: 16px; }
+  html.menu-a #detailPanel { top: 72px; }
+}
+
+/* --- B: 머리말 안 책갈피 탭 --- */
+#aaaSeg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: #3a3046d9; border: 1px solid #ffffff22;
+  box-shadow: inset 0 1px 2px #0005; }
+#aaaSeg .seg { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 999px; color: #eadff3; text-decoration: none;
+  font: 600 13px/1 "Pretendard Variable", "Gowun Dodum", system-ui, sans-serif; }
+#aaaSeg .seg:hover { background: #ffffff14; }
+#aaaSeg .seg[aria-current="page"] { background: #fff8e9; color: #3a3046; box-shadow: 0 2px 0 #c9b99f; }
+#aaaSeg .ic { font-size: 14px; }
+html.menu-b #pwaBar.inline { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 0; width: 100%; }
+html.menu-b #pwaBar .round { width: 32px; min-height: 32px; padding: 0; justify-content: center; }
+html.menu-b #nightBtn .label { display: none; }
+html.menu-b #nightBtn { width: 32px; padding: 0; justify-content: center; }
+html.menu-b .map-actions { flex-wrap: wrap; overflow: visible; }
+html.menu-b .map-actions #pwaBar.inline { order: -1; margin-bottom: 4px; }
+@media (max-width: 420px) { #aaaSeg .seg { padding: 6px 8px; font-size: 12.5px; } }
+
+/* --- C: 별 버튼과 말풍선 --- */
+#aaaFab { position: fixed; z-index: 2147482985; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); }
+#aaaFab .star { width: 50px; height: 50px; border-radius: 50%; border: 2px solid #f1cd89; cursor: pointer;
+  background: radial-gradient(circle at 35% 30%, #4a4268, #28253e); color: #ffe6a8; font-size: 24px;
+  box-shadow: 0 4px 0 #17142a, 0 10px 24px #0007; transition: transform .15s; }
+#aaaFab .star[aria-expanded="true"] { transform: rotate(72deg); }
+#aaaPop { position: absolute; right: 0; top: 60px; width: min(280px, calc(100vw - 24px)); padding: 8px; border-radius: 20px;
+  background: #fff8e9; border: 1px solid #d8ccb4; box-shadow: 0 12px 36px #0007; color: #393634;
+  font: 14px/1.4 "Pretendard Variable", "Gowun Dodum", system-ui, sans-serif; animation: aaa-fade .15s ease-out; }
+#aaaPop::before { content: ""; position: absolute; right: 18px; top: -7px; width: 12px; height: 12px; background: #fff8e9;
+  border-left: 1px solid #d8ccb4; border-top: 1px solid #d8ccb4; transform: rotate(45deg); }
+#aaaPop[hidden] { display: none; }
+#aaaPop nav a { display: grid; grid-template-columns: 28px 1fr; align-items: center; padding: 8px 10px; border-radius: 13px; color: inherit; text-decoration: none; }
+#aaaPop nav a span { grid-row: span 2; font-size: 19px; }
+#aaaPop nav a small { color: #6d6273; font-size: 11.5px; }
+#aaaPop nav a:hover, #aaaPop nav a:focus-visible { background: #f4ead8; outline: none; }
+#aaaPop nav a[aria-current="page"] { background: #e3ecd9; }
+#aaaPop .pop-row { display: flex; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px dashed #d8ccb4; }
+#aaaPop .pop-row button { flex: 1; min-height: 38px; border-radius: 12px; border: 1px solid #cdbfa7; background: #fff; color: #393634; font: inherit; font-weight: 600; cursor: pointer; }
+html.menu-c #detailPanel { top: 74px; }
+html.menu-c #nightBtn { display: none; }
+html.menu-c body > main > header, html.menu-c body > header { padding-right: 60px; }
+@media print { #aaaTabs, #aaaFab { display: none !important; } }
