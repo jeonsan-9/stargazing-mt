@@ -5,6 +5,7 @@
 import { scoreNight, scoreColor, addDays, ymd } from "./score.js";
 import { academic, conflict } from "./calendar.js";
 import { renderRetro } from "./retro.js";
+import { astroEvents, eventsNear, eventsHTML } from "./events.js";
 
 const KST = "+09:00";
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
@@ -112,6 +113,8 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
         if (!byWeekend.has(key) || (n.score ?? -1) > (byWeekend.get(key).score ?? -1)) byWeekend.set(key, n);
       }
       const top = [...byWeekend.values()].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5);
+      const events = astroEvents(sem.start > todayYmd ? sem.start : todayYmd, sem.end, site);
+      const evTitle = (d) => eventsNear(events, d).map((e) => e.title).join(", ");
       const strip = nights
         .map((n) => {
           const [r, g, b] = scoreColor(n.score * 1.8);
@@ -119,7 +122,7 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
           const label = `${d.getUTCMonth() + 1}/${d.getUTCDate()} (${WD[d.getUTCDay()]})`;
           return n.blocked
             ? `<button class="strip-cell x" data-ymd="${n.ymd}" title="${label} · ${n.blocked}"></button>`
-            : `<button class="strip-cell${top.includes(n) ? " top" : ""}" data-ymd="${n.ymd}" title="${label} · 좋은 밤 ${n.score}%${n.rain != null ? ` · 비 ${Math.round(n.rain * 100)}%` : ""}" style="background:rgba(${r},${g},${b},.9)"></button>`;
+            : `<button class="strip-cell${top.includes(n) ? " top" : ""}${evTitle(n.ymd) ? " ev" : ""}" data-ymd="${n.ymd}" title="${label} · 좋은 밤 ${n.score}%${n.rain != null ? ` · 비 ${Math.round(n.rain * 100)}%` : ""}${evTitle(n.ymd) ? ` · ${evTitle(n.ymd)}` : ""}" style="background:rgba(${r},${g},${b},.9)"></button>`;
         })
         .join("");
       const list = top
@@ -130,7 +133,7 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
           const why = `${n.rain != null ? `비 올 확률 ${Math.round(n.rain * 100)}% · ` : ""}이 시기(±1주) 맑고 비 없던 밤 ${Math.round(good * 100)}% · 달 없는 시간 ${Math.round(n.dark * 100)}%`;
           return `<button class="pick" data-ymd="${n.ymd}">
             <span class="rank">${k + 1}</span>
-            <span class="pd"><b>${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WD[d.getUTCDay()]}) 밤 <i class="odds ${oc}">날씨 운 ${o}</i></b><small>${why}</small></span>
+            <span class="pd"><b>${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WD[d.getUTCDay()]}) 밤 <i class="odds ${oc}">날씨 운 ${o}</i></b><small>${why}</small>${evTitle(n.ymd) ? `<small class="ev-tag">${eventsNear(events, n.ymd).map((e) => `${e.icon} ${e.title}`).join(" · ")}</small>` : ""}</span>
             ${moonIcon(n.moon.phase, 16)}${badge(n.score, "통계")}</button>`;
         })
         .join("");
@@ -140,8 +143,10 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
       return `<section class="sem"><h3>${sem.name} MT 날짜 미리 정하기</h3>
         <p class="lead">예보 없이 영천의 10년 기록(비·구름)과 달만으로 매긴 순위예요. 시험기간과 연휴는 뺐어요.</p>
         <div class="strip">${strip}</div>
-        <div class="strip-legend"><span>${(sem.start > todayYmd ? sem.start : todayYmd).slice(5).replace("-", "/")}</span><span>금·토 밤 · 빗금 = 제외</span><span>${sem.end.slice(5).replace("-", "/")}</span></div>
+        <div class="strip-legend"><span>${(sem.start > todayYmd ? sem.start : todayYmd).slice(5).replace("-", "/")}</span><span>금·토 밤 · 빗금 = 제외 · 점 = 천문 현상</span><span>${sem.end.slice(5).replace("-", "/")}</span></div>
         ${list}
+        <h4 class="ev-head">이 학기 천문 현상 <small>· 날짜를 누르면 그 밤으로</small></h4>
+        ${eventsHTML(events)}
         <div class="chips">${avoid}${sem.guessed ? '<span class="chip soft">학사일정 추정치</span>' : ""}</div></section>`;
     })
     .join("");
@@ -149,7 +154,10 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
     html +
     `<section class="sem"><h3>지난 MT 돌아보기</h3><div id="retroBox">${retroHTML ?? ""}</div></section>` +
     note(data);
-  box.querySelectorAll("[data-ymd]").forEach((el) => (el.onclick = () => onPick(el.dataset.ymd)));
+  box.querySelectorAll("[data-ymd]").forEach((el) => {
+    el.onclick = () => onPick(el.dataset.ymd);
+    if (el.tagName === "LI") el.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onPick(el.dataset.ymd));
+  });
   if (retroHTML == null && !retroJob) {
     // 한 번만 불러오고, 그 사이 화면이 다시 그려져도 지금 있는 상자에 넣음
     const tmp = document.createElement("div");
@@ -168,24 +176,30 @@ export function renderMonth(box, data, site, ym, todayYmd, onPick, onMove) {
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const lead = first.getUTCDay();
   let cells = "";
+  const events = astroEvents(`${ym}-01`, `${ym}-${String(days).padStart(2, "0")}`, site);
   for (let k = 0; k < lead; k++) cells += `<span class="cal-empty"></span>`;
   for (let d = 1; d <= days; d++) {
     const ds = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const n = nightOutlook(data, site, ds);
     const past = ds < todayYmd;
+    const ev = events.filter((e) => e.ymd === ds);
     const [r, g, b] = scoreColor(n.kind === "통계" ? n.score * 1.8 : n.score);
     cells += `<button class="cal${past ? " past" : ""}${n.kind === "예보" ? " fc" : ""}${ds === todayYmd ? " today" : ""}" data-ymd="${ds}"
-      title="${m}/${d} 밤 · ${n.kind === "통계" ? `좋은 밤 ${n.score}%${n.rain != null ? ` · 비 올 확률 ${Math.round(n.rain * 100)}%` : ""}` : `${n.score}점 (예보)`}" style="--c:rgba(${r},${g},${b},.9)">
-      <span class="cd">${d}</span>${n.rain != null && n.rain >= 0.35 && !past ? '<span class="cr" title="비 잦은 시기">☂</span>' : ""}${moonIcon(n.moon.phase, 12)}<span class="cs">${n.score ?? ""}${n.kind === "통계" ? "<small>%</small>" : ""}</span></button>`;
+      title="${m}/${d} 밤 · ${n.kind === "통계" ? `좋은 밤 ${n.score}%${n.rain != null ? ` · 비 올 확률 ${Math.round(n.rain * 100)}%` : ""}` : `${n.score}점 (예보)`}${ev.map((e) => ` · ${e.title}`).join("")}" style="--c:rgba(${r},${g},${b},.9)">
+      <span class="cd">${d}</span>${n.rain != null && n.rain >= 0.35 && !past ? '<span class="cr" title="비 잦은 시기">☂</span>' : ""}${ev.length ? `<span class="ce" aria-hidden="true">${ev[0].icon}</span>` : ""}${moonIcon(n.moon.phase, 12)}<span class="cs">${n.score ?? ""}${n.kind === "통계" ? "<small>%</small>" : ""}</span></button>`;
   }
   const mm = data.climate?.by_month?.[m - 1];
   box.innerHTML = `
     <div class="cal-head"><button data-move="-1" aria-label="이전 달">‹</button><b>${y}년 ${m}월</b><button data-move="1" aria-label="다음 달">›</button></div>
     ${mm ? `<p class="lead">영천 ${m}월 · 비 온 날 평균 <b>${mm.rain_days ?? "-"}일</b> (비 올 확률 ${mm.rain != null ? Math.round(mm.rain * 100) : "-"}%) · 맑은 밤 ${Math.round(mm.clear * 100)}% · 평균 밤 구름 ${Math.round(mm.cloud)}%</p>` : ""}
     <div class="cal-grid">${WD.map((w) => `<span class="cal-wd">${w}</span>`).join("")}${cells}</div>
-    <div class="cal-legend"><span><i class="fc-dot"></i>테두리 = 모델 예보</span><span>☂ = 10년 중 비 잦은 날</span><span>나머지 = 10년 통계 + 월령</span></div>
+    <div class="cal-legend"><span><i class="fc-dot"></i>테두리 = 모델 예보</span><span>☂ = 10년 중 비 잦은 날</span><span>☄️🪐🌕 = 천문 현상</span><span>나머지 = 10년 통계 + 월령</span></div>
+    ${events.length ? `<h4 class="ev-head">${m}월 천문 현상</h4>${eventsHTML(events)}` : ""}
     ${note(data)}`;
-  box.querySelectorAll("[data-ymd]").forEach((el) => (el.onclick = () => onPick(el.dataset.ymd)));
+  box.querySelectorAll("[data-ymd]").forEach((el) => {
+    el.onclick = () => onPick(el.dataset.ymd);
+    if (el.tagName === "LI") el.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onPick(el.dataset.ymd));
+  });
   box.querySelectorAll("[data-move]").forEach((el) => (el.onclick = () => onMove(+el.dataset.move)));
 }
 

@@ -24,7 +24,7 @@ const ELEM = {
   neptune: [[30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574], [0.00026291, 0.00005105, 0.00035372, 218.45945325, -0.32241464, -0.00508664]],
 };
 
-const PLANETS = [
+export const PLANETS = [
   { id: "venus", name: "금성", H: -4.4, w: 0.85, tip: "초저녁·새벽 낮은 하늘의 가장 밝은 별. 망원경으로 위상(초승달 모양)이 보여요" },
   { id: "jupiter", name: "목성", H: -9.4, w: 1, tip: "쌍안경으로도 갈릴레이 위성 4개, 망원경이면 줄무늬까지" },
   { id: "saturn", name: "토성", H: -8.9, w: 1, tip: "작은 망원경으로도 고리가 보이는 최고의 대상" },
@@ -58,7 +58,7 @@ function helio(id, T) {
   ];
 }
 
-function planetRaDec(p, date) {
+export function planetRaDec(p, date) {
   const T = (julian(date) - 2451545) / 36525;
   const P = helio(p.id, T);
   const E = helio("earth", T);
@@ -75,6 +75,16 @@ function planetRaDec(p, date) {
   const phase = Math.acos(Math.max(-1, Math.min(1, cosPh))) * DEG;
   const mag = p.H + 5 * Math.log10(rr * delta) + 0.02 * phase;
   return { ra: Math.atan2(y, x) * DEG / 15, dec: Math.asin(z / delta) * DEG, mag, dist: delta };
+}
+
+// 태양과 행성 사이 각거리(이각, °). 지구에서 본 행성 방향과 태양 방향의 사잇각
+export function elongation(id, date) {
+  const T = (julian(date) - 2451545) / 36525;
+  const P = helio(id, T);
+  const E = helio("earth", T);
+  const g = [P[0] - E[0], P[1] - E[1], P[2] - E[2]];
+  const dot = -(g[0] * E[0] + g[1] * E[1] + g[2] * E[2]) / (Math.hypot(...g) * Math.hypot(...E));
+  return Math.acos(Math.max(-1, Math.min(1, dot))) * DEG;
 }
 
 // ---------- 딥스카이 ----------
@@ -112,7 +122,7 @@ const DSO = [
 
 // ---------- 유성우 ----------
 // [이름, 극대(월, 일), 활동 반경(일), ZHR, 복사점 적경(시), 적위(°)]
-const SHOWERS = [
+export const SHOWERS = [
   ["사분의자리 유성우", 1, 3, 2, 110, 15.33, 49.5],
   ["거문고자리 유성우", 4, 22, 2, 18, 18.07, 34],
   ["물병자리 에타 유성우", 5, 6, 3, 50, 22.47, -1],
@@ -166,6 +176,8 @@ const PLANET_RADII = { mercury: 2440.5, venus: 6051.8, mars: 3396.2, jupiter: 71
 export const observingTargets = [
   { id: "moon", name: "달", kind: "달", aliases: ["Moon"] },
   ...PLANETS.map(({ id, name }) => ({ id, name, kind: "행성", aliases: [id] })),
+  // 은하수 중심 팽대부: 사진 구도용 대략 20° × 10°
+  { id: "galactic-core", name: "은하수 중심", ra: 17.761, dec: -29.008, kind: "은하수", aliases: ["은하수 중심", "은하수", "Galactic Center", "Sgr A*"], size: [1200, 600] },
   { id: "M81", name: "보데 은하", ra: 9.92588, dec: 69.06531, kind: "은하", aliases: ["M81", "NGC 3031"], size: [21.63, 11.25] },
   { id: "M82", name: "시가 은하", ra: 9.93131, dec: 69.67939, kind: "은하", aliases: ["M82", "NGC 3034"], size: [10.99, 5.11] },
   { id: "NGC 869", name: "페르세우스 h 성단", ra: 2.31627, dec: 57.11725, kind: "성단", aliases: ["NGC 869"], size: [14.4, 14.4] },

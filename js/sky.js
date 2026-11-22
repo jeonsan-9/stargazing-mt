@@ -279,8 +279,62 @@ function look(az, alt) {
   requestDraw();
 }
 
+// 폰을 하늘에 대면 따라 도는 보기. 뒷면 카메라가 향하는 방향(기기 −z축)을 방위·고도로 바꿉니다.
+let gyro = false, smooth;
+function cameraDirection(alpha, beta, gamma) {
+  const [a, b, g] = [alpha * RAD, beta * RAD, gamma * RAD];
+  const x = -(Math.cos(a) * Math.sin(g) + Math.sin(a) * Math.sin(b) * Math.cos(g));
+  const y = -(Math.sin(a) * Math.sin(g) - Math.cos(a) * Math.sin(b) * Math.cos(g));
+  const z = -Math.cos(b) * Math.cos(g);
+  return { az: Math.atan2(x, y) / RAD, alt: Math.asin(clamp(z, -1, 1)) / RAD };
+}
+function onOrientation(event) {
+  if (!gyro || event.beta == null) return;
+  const ios = typeof event.webkitCompassHeading === "number";
+  if (!ios && event.type === "deviceorientation" && !event.absolute && window.ondeviceorientationabsolute !== undefined) return;
+  const dir = cameraDirection(event.alpha ?? 0, event.beta, event.gamma ?? 0);
+  const az = ios ? event.webkitCompassHeading : dir.az;
+  // 흔들림을 줄이는 저역 통과 (방위는 원형 평균)
+  if (!smooth) smooth = { x: Math.sin(az * RAD), y: Math.cos(az * RAD), alt: dir.alt };
+  smooth.x += (Math.sin(az * RAD) - smooth.x) * 0.25;
+  smooth.y += (Math.cos(az * RAD) - smooth.y) * 0.25;
+  smooth.alt += (dir.alt - smooth.alt) * 0.25;
+  look(Math.atan2(smooth.x, smooth.y) / RAD, smooth.alt);
+}
+function setGyro(on) {
+  gyro = on;
+  smooth = undefined;
+  $("gyro").setAttribute("aria-pressed", String(on));
+  $("gyro").textContent = on ? "📱 폰 따라가기 끄기" : "📱 폰으로 보기";
+  document.body.classList.toggle("gyro-on", on);
+  if (on) {
+    const now = Math.round((Date.now() - startTime()) / 300000);
+    if (now >= 0 && now <= 144) { $("minute").value = now; updateTime(); }
+    $("sky-help").textContent = "폰 뒷면을 하늘로 향하세요. 나침반이 어긋나면 폰으로 8자를 그려 보정하세요.";
+  } else $("sky-help").textContent = "드래그하거나 방향키를 눌러 둘러보세요.";
+}
+if ("DeviceOrientationEvent" in window && matchMedia("(pointer: coarse)").matches) {
+  $("gyro").hidden = false;
+  window.addEventListener("deviceorientationabsolute", onOrientation);
+  window.addEventListener("deviceorientation", onOrientation);
+}
+$("gyro").addEventListener("click", async () => {
+  if (gyro) return setGyro(false);
+  // iOS 13+는 사용자가 누른 순간에 권한을 물어야 합니다.
+  if (typeof DeviceOrientationEvent.requestPermission === "function") {
+    try {
+      if (await DeviceOrientationEvent.requestPermission() !== "granted") throw new Error("denied");
+    } catch {
+      $("sky-help").textContent = "방향 센서 권한이 없어 폰 따라가기를 켤 수 없습니다. 설정 › Safari에서 동작 및 방향 접근을 허용하세요.";
+      return;
+    }
+  }
+  setGyro(true);
+});
+
 canvas.addEventListener("pointerdown", (event) => {
   if (!event.isPrimary) return;
+  if (gyro) setGyro(false);
   pointer = [event.clientX, event.clientY];
   canvas.setPointerCapture(event.pointerId);
 });
@@ -298,7 +352,7 @@ canvas.addEventListener("keydown", (event) => {
   event.preventDefault();
   look(azimuth + step[0], tilt + step[1]);
 });
-for (const button of document.querySelectorAll("[data-bearing]")) button.addEventListener("click", () => look(+button.dataset.bearing, 20));
+for (const button of document.querySelectorAll("[data-bearing]")) button.addEventListener("click", () => { setGyro(false); look(+button.dataset.bearing, 20); });
 $("look-moon").addEventListener("click", () => {
   if (scene) look(scene.moon.az, Math.max(12, scene.moon.alt));
 });

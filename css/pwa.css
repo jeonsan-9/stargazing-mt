@@ -94,3 +94,60 @@ html.night-red { background: #000; color-scheme: dark; }
 }
 
 @media print { #pwaBar, #nightVeil, #iosTip { display: none !important; } }
+
+/* ---------- 공통 메뉴·신고 시트 (휴대폰은 아래에서 올라오는 시트, 넓은 화면은 가운데 카드) ---------- */
+#aaaSheet { position: fixed; inset: 0; z-index: 2147482990; display: grid; align-items: end; justify-items: center;
+  font: 14px/1.5 "Pretendard Variable", "Gowun Dodum", system-ui, sans-serif; color: #393634; }
+#aaaSheet[hidden] { display: none; }
+html.sheet-open, html.sheet-open body { overflow: hidden; }
+.sheet-backdrop { position: absolute; inset: 0; background: #120f1e8c; backdrop-filter: blur(2px); animation: aaa-fade .18s ease-out; }
+.sheet-card { position: relative; width: min(520px, 100%); max-height: min(88vh, 720px); overflow: auto; margin: 0;
+  padding: 10px 16px max(16px, env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0;
+  background: #fff8e9; border: 1px solid #d8ccb4; box-shadow: 0 -10px 40px #0006; animation: aaa-up .22s ease-out; color-scheme: light; }
+.sheet-card::before { content: ""; display: block; width: 42px; height: 4px; margin: 0 auto 8px; border-radius: 4px; background: #d5c8b1; }
+@media (min-width: 700px) {
+  #aaaSheet { align-items: center; }
+  .sheet-card { border-radius: 22px; padding-bottom: 16px; }
+  .sheet-card::before { display: none; }
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.sheet-head h2 { margin: 0; font: 22px "Jua", "Gowun Dodum", sans-serif; color: #3a3046; }
+.sheet-x { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #d8ccb4; background: #fff; font: inherit; cursor: pointer; }
+.sheet-pages { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sheet-pages a { display: grid; grid-template-columns: auto 1fr; column-gap: 9px; align-items: center; padding: 11px 12px; border-radius: 15px;
+  background: #f4ead8; color: #3a3046; text-decoration: none; border: 1px solid transparent; box-shadow: 0 2px 0 #e0d2bb; }
+.sheet-pages a:hover, .sheet-pages a:focus-visible { border-color: #8a7299; outline: none; }
+.sheet-pages a[aria-current="page"] { background: #e3ecd9; border-color: #8fb08c; }
+.sheet-pages .ic { grid-row: span 2; font-size: 22px; }
+.sheet-pages b { font-size: 15px; }
+.sheet-pages small { color: #6d6273; font-size: 11.5px; line-height: 1.3; }
+.sheet-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.sheet-row button { flex: 1 1 140px; min-height: 42px; padding: 6px 12px; border-radius: 13px; border: 1px solid #cdbfa7;
+  background: #fff; color: #393634; font: inherit; font-weight: 600; cursor: pointer; }
+.sheet-row button.primary { background: #5f4a73; border-color: #5f4a73; color: #fff8e9; }
+.sheet-row button:focus-visible, .sheet-x:focus-visible { outline: 2px solid #48674f; outline-offset: 2px; }
+.sheet-foot, .sheet-note { margin: 10px 2px 0; color: #6d6273; font-size: 12px; }
+.sheet-status { margin: 8px 2px 0; font-weight: 600; color: #48674f; min-height: 1em; }
+.report-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0; padding: 0; border: 0; }
+.report-kinds legend { margin-bottom: 6px; font-weight: 700; }
+.report-kinds label { display: flex; gap: 8px; align-items: flex-start; padding: 9px 10px; border-radius: 13px; background: #f4ead8; cursor: pointer; border: 1px solid transparent; }
+.report-kinds label:has(input:checked) { background: #ece3f4; border-color: #8a7299; }
+.report-kinds input { margin-top: 4px; accent-color: #5f4a73; }
+.report-kinds span { display: grid; }
+.report-kinds small { color: #6d6273; font-size: 11.5px; line-height: 1.3; }
+.report-field { display: block; margin-top: 10px; font-weight: 700; }
+.report-field select, .report-field textarea { display: block; width: 100%; margin-top: 4px; padding: 8px 10px; border: 1px solid #cdbfa7; border-radius: 11px;
+  background: #fffdf8; color: #393634; font: inherit; font-weight: 400; box-sizing: border-box; }
+.report-field textarea { resize: vertical; min-height: 84px; }
+@media (max-width: 360px) { .sheet-pages, .report-kinds { grid-template-columns: 1fr; } }
+@keyframes aaa-up { from { transform: translateY(24px); opacity: 0; } }
+@keyframes aaa-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sheet-card, .sheet-backdrop { animation: none; } }
+@media print { #aaaSheet { display: none !important; } }
+/* 페이지 CSS(label input 등)가 시트 안 폼에 새지 않게 */
+#aaaSheet .report-kinds input[type="radio"] { display: inline-block; width: 18px; height: 18px; min-height: 0; flex: none; padding: 0; }
+#aaaSheet label { font-size: 14px; }
+#aaaSheet .sheet-x { min-width: 0; padding: 0; color: #393634; }
+/* 머리말 안에서는 메뉴·야간만 두고 설치는 메뉴 시트로 */
+#pwaBar.inline #installBtn { display: none; }
+#menuBtn { background: #5f4a73 !important; color: #fff8e9 !important; border-color: #5f4a73 !important; box-shadow: 0 2px 0 #3c2e4a !important; }

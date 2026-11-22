@@ -263,3 +263,38 @@ html[data-map="diorama"] #diorama-stage { display: block; position: fixed; inset
 @media (max-width: 760px) {
   html[data-map="diorama"] #diorama-stage { inset: 0 0 calc(36dvh + 145px); }
 }
+
+/* ---------- 천문 현상 ---------- */
+.strip-cell.ev { position: relative; }
+.strip-cell.ev::after { content: ""; position: absolute; left: 50%; top: -5px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--accent-2, #f3c580); }
+.ev-tag { display: block; margin-top: 2px; color: var(--accent-2, #c98a3b); font-weight: 700; }
+.ev-head { margin: 16px 0 6px; font-size: 13px; }
+.ev-head small { font-weight: 400; color: var(--muted); }
+.events { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.events .ev { display: grid; grid-template-columns: 26px 1fr; gap: 2px 8px; align-items: start; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line, #ffffff22); cursor: pointer; }
+.events .ev:hover, .events .ev:focus-visible { background: rgba(255,255,255,.06); outline: none; }
+.events .ev-ic { font-size: 18px; line-height: 1.2; grid-row: span 2; }
+.events .ev-tx b { display: block; font-size: 13px; }
+.events .ev-tx small { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.events .ev-moon { grid-column: 2; font-size: 11.5px; font-weight: 700; }
+.events .ev.good .ev-moon { color: #4f8a5b; }
+.events .ev.mid .ev-moon { color: #b07a2a; }
+.events .ev.bad .ev-moon { color: #b0503d; }
+.events .ev.neutral .ev-moon { color: var(--muted); font-weight: 600; }
+.cal .ce { position: absolute; top: 2px; left: 3px; font-size: 9px; line-height: 1; }
+/* 한마디 평가와 경고 */
+.word { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; vertical-align: middle;
+  color: #1d2433; background: #d8dbe6; }
+h3 .word { font-size: 12.5px; font-family: system-ui, sans-serif; }
+.sname small .word { margin-right: 3px; }
+.word.best { background: #8fdc9a; } .word.good { background: #c4e79a; } .word.mid { background: #f2dc8e; }
+.word.bad { background: #f2b48c; } .word.off { background: #c9b8c4; color: #463a46; }
+.flag { margin: 6px 0; padding: 7px 10px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; color: #2c2633; }
+.flag.warn { background: #f7d9a6; } .flag.dew { background: #cfe3f2; }
+
+/* 상단 메뉴 한 줄: 휴대폰에서는 가로로 밀어서 보기 */
+.map-actions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 2px 1px 4px; margin: 0 -1px; }
+.map-actions::-webkit-scrollbar { display: none; }
+.map-actions > * { flex: none; }
+.map-actions #map-link { border: 1px dashed currentColor; border-radius: 999px; padding: .32rem .7rem; text-decoration: none; }
+.map-actions #pwaBar.inline { margin-left: auto; }

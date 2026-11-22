@@ -1,9 +1,10 @@
 import { SITES } from "./sites.js";
 import { renderSiteInfo } from "./site-info.js";
-import { altAz, observeTarget, observingTargets, searchObservingTargets } from "./targets.js";
+import { PLANETS, planetRaDec, altAz, observeTarget, observingTargets, searchObservingTargets } from "./targets.js";
 import { figureSegments, nearestFigure } from "./constellations.js";
 import { initMarathon, updateMarathon } from "./marathon.js?v=20261122h";
 import { ymd } from "./score.js";
+import { coreSummary } from "./core.js";
 import { drawNightSky, nightSky } from "./diorama/night.js";
 import { cameraFrame, drawCameraFrame } from "./diorama/optics.js?v=20261122d";
 import { drawSkyMap } from "./diorama/sky-map.js?v=20261122e";
@@ -15,6 +16,8 @@ const directions = ["북", "북동", "동", "남동", "남", "남서", "서", "�
 const presets = { full: [36, 24], aps: [23.5, 15.6], mft: [17.3, 13],
   // 스마트 망원경: 제조사 공개 센서 해상도×화소 크기와 초점거리
   seestar_s50: [5.57, 3.13], seestar_s30: [5.57, 3.13], dwarf3: [7.68, 4.32] };
+// 센서별 대표 화소 크기 (µm). 직접 입력도 가능
+const pixelPitch = { full: 4.3, aps: 3.9, mft: 3.75, seestar_s50: 2.9, seestar_s30: 2.9, dwarf3: 2.0 };
 const smartFocal = { seestar_s50: 250, seestar_s30: 150, dwarf3: 150 };
 let choices, target, sky, skyKey, apparentSize, skyPoints = [], skyHits = [], editingSession, figures = [];
 let starCatalog = [];
@@ -63,7 +66,7 @@ function selectedSite() {
 function updateSearch(preferred = $("target").value || "M31") {
   choices = searchObservingTargets($("search").value);
   $("target").replaceChildren(...choices.map((item) =>
-    new Option(item.id === "moon" || item.kind === "행성" || item.kind === "좌표" ? item.name : `${item.id} · ${item.name}`, item.id)));
+    new Option(item.id === "moon" || item.kind === "행성" || item.kind === "은하수" || item.kind === "좌표" ? item.name : `${item.id} · ${item.name}`, item.id)));
   if (choices.some(({ id }) => id === preferred)) $("target").value = preferred;
   else if (choices[0]?.kind === "좌표") $("target").value = choices[0].id;
   $("target").disabled = choices.length === 0;
@@ -122,10 +125,29 @@ function updateSky() {
     const peak = target && samples.length ? samples.reduce((best, sample, index) => sample.target > samples[best].target ? index : best, 0) : -1;
     if (peak > 0 && peak < samples.length - 1 && samples[peak].target > 0 && target.id !== "moon")
       crossings.push([samples[peak].time, `남중 ${clock.format(samples[peak].time)} (${Math.round(samples[peak].target)}°)`]);
+    updateCore(day, site);
     $("crossings").textContent = crossings.length ? `뜨고 지는 시각 · ${crossings.sort((a, b) => a[0] - b[0]).map(([, label]) => label).join(" · ")}` : "";
   }
   updatePosition();
 }
+
+let coreKey, coreNext;
+function updateCore(day, site) {
+  const key = `${site.id}:${day}`;
+  if (key === coreKey) return;
+  coreKey = key;
+  const core = coreSummary(day, site);
+  coreNext = core.nextDay;
+  $("core-time").textContent = core.visible ? core.text : "오늘 밤은 안 보임";
+  $("core-note").textContent = core.visible ? core.next : `${core.text} ${core.next}`;
+  $("core-card").classList.toggle("good", Boolean(core.moonGood));
+  $("core-go").textContent = core.visible ? "은하수 중심 보기" : coreNext ? "그날로 이동" : "은하수 중심 보기";
+}
+$("core-go").addEventListener("click", () => {
+  if (coreNext) $("night").value = coreNext;
+  $("search").value = "";
+  updateSearch("galactic-core");
+});
 
 function updatePosition() {
   const time = sky?.samples[Number($("scrub").value)]?.time;
@@ -181,6 +203,32 @@ function frameSize(frame) {
   return `가로 ${frame.width.toFixed(2)}° × 세로 ${frame.height.toFixed(2)}°${fit}`;
 }
 
+// 고정 삼각대에서 별이 점으로 남는 최대 노출.
+// NPF: (16.856·N + 0.0997·f + 13.713·p) / (f · cos δ), 500 규칙: 500 / (f · 크롭 배율)
+function updateExposure(equipment) {
+  const N = $("aperture").valueAsNumber, p = $("pixel").valueAsNumber;
+  const planet = PLANETS.find(({ id }) => id === target?.id);
+  const dec = target?.dec ?? (planet ? planetRaDec(planet, new Date(`${$("night").value}T22:00:00+09:00`)).dec : undefined);
+  const cosDec = Number.isFinite(dec) ? Math.max(Math.cos(dec * Math.PI / 180), 0.05) : 1;
+  const ok = equipment && $("aperture").validity.valid && $("pixel").validity.valid && N > 0 && p > 0;
+  const seconds = (value) => value >= 10 ? `${Math.round(value)}초` : `${value.toFixed(1)}초`;
+  if (!ok) {
+    $("npf").textContent = $("rule500").textContent = $("exp-dec").textContent = "–";
+    $("exposure-note").textContent = "초점거리, 조리개와 화소 크기를 확인하세요.";
+    return;
+  }
+  const f = equipment.focal;
+  const crop = 43.27 / Math.hypot(equipment.width, equipment.height);
+  const npf = (16.856 * N + 0.0997 * f + 13.713 * p) / (f * cosDec);
+  $("npf").textContent = seconds(npf);
+  $("rule500").textContent = seconds(500 / (f * crop) / cosDec);
+  $("exp-dec").textContent = Number.isFinite(dec) ? `${dec >= 0 ? "+" : "−"}${Math.abs(dec).toFixed(0)}°` : "적도 기준";
+  const smart = Object.hasOwn(smartFocal, equipment.sensor);
+  $("exposure-note").textContent = smart ? "스마트 망원경은 추적하며 짧은 노출(10~20초)을 쌓으므로 이 값은 참고용입니다."
+    : npf < 2 ? "초점거리가 길어 고정 삼각대로는 별이 흐릅니다. 적도의(추적 장치)를 쓰세요."
+    : "고정 삼각대 기준입니다. 고화소 센서는 NPF 값을, 확대해 보지 않을 사진은 500 규칙 값을 쓰세요. 북극성 근처일수록 더 길게 노출할 수 있습니다.";
+}
+
 function updateFraming() {
   $("sensor-size").hidden = $("sensor").value !== "custom";
   $("rotation").textContent = `${$("angle").value}°`;
@@ -189,7 +237,9 @@ function updateFraming() {
   const validSize = [$("major"), $("minor")].every((field) => field.value && field.validity.valid);
   const size = override ? (validSize ? suppliedSize : null) : apparentSize;
   const saved = gear.find(({ name }) => name === $("gear-select").value);
-  const frame = toFrame(currentEquipment(), size);
+  const equipment = currentEquipment();
+  updateExposure(equipment);
+  const frame = toFrame(equipment, size);
   const comparison = toFrame(saved, size);
   drawCameraFrame($("framing"), frame, comparison);
   skyHits = drawSkyMap($("sky-map"), skyPoints, sky?.samples ?? [], target?.id, frame, comparison, $("show-figures").checked ? figures : []);
@@ -283,7 +333,8 @@ $("search").addEventListener("input", () => updateSearch());
 $("target").addEventListener("change", selectTarget);
 for (const id of ["site", "night"]) $(id).addEventListener("input", updateSky);
 $("scrub").addEventListener("input", updatePosition);
-for (const id of ["sensor", "sensor-width", "sensor-height", "focal", "angle", "major", "minor"]) $(id).addEventListener("input", updateFraming);
+for (const id of ["sensor", "sensor-width", "sensor-height", "focal", "angle", "major", "minor", "aperture", "pixel"]) $(id).addEventListener("input", updateFraming);
+$("sensor").addEventListener("change", () => { if (Object.hasOwn(pixelPitch, $("sensor").value)) $("pixel").value = pixelPitch[$("sensor").value]; updateFraming(); });
 $("sky-map").addEventListener("click", (event) => {
   const rect = $("sky-map").getBoundingClientRect();
   const x = (event.clientX - rect.left) * $("sky-map").width / rect.width;
@@ -383,4 +434,10 @@ initMarathon((id) => {
   $("search").value = id;
   updateSearch(id);
   $("search-title").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+// 넓은 화면에서는 마라톤 목록을 펼쳐 둠, 휴대폰은 접어서 스크롤을 줄임
+if (matchMedia("(min-width: 761px)").matches) { $("marathon-more").open = true; $("marathon-more").querySelector("summary").textContent = "목록 접기"; }
+$("marathon-more").addEventListener("toggle", () => {
+  $("marathon-more").querySelector("summary").textContent = $("marathon-more").open ? "목록 접기" : "110개 목록 펼치기";
 });
