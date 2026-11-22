@@ -941,6 +941,7 @@ function renderDetail() {
     ${flagsHTML(r)}
     <a id="site-sky-link" class="diorama-link" href="./sky.html">이곳에서 하늘 보기</a>
     ${!map ? '<button id="site-model" class="diorama-link" type="button">이 지점 확대</button>' : ''}
+    <button class="diorama-link" type="button" data-report="site" data-report-site="${r.site.id}">정보 고치기·신고</button>
     <details><summary>관측 시 주의사항</summary><div id="main-site-info" class="hint"></div></details>
     <p class="lead">${
       r.score == null
