@@ -33,13 +33,22 @@ jobs:
         with:
           python-version: "3.12"
       - name: 예보 수집
+        id: fetch
+        # 예보 API가 잠깐 막혀도 사이트 코드 배포는 계속 (아래에서 지난 예보를 이어 씀)
+        continue-on-error: true
         env:
           KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
           KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
         run: python3 scripts/fetch_forecast.py
+      - name: 예보 실패 시 지난 예보 이어 쓰기
+        if: steps.fetch.outcome != 'success'
+        run: |
+          mkdir -p data
+          curl -sfL --retry 3 "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/forecast.json" -o data/forecast.json \
+            || echo "지난 예보도 없음: 브라우저가 Open-Meteo를 직접 호출합니다"
       - name: 사이트 묶기
         run: |
-          mkdir -p _site
+          mkdir -p _site data
           cp -r index.html diorama.html observe.html sky.html manifest.webmanifest sw.js icons css js data models _site/
       - uses: actions/upload-pages-artifact@v3
         with:
