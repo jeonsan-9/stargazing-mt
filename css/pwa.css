@@ -173,12 +173,37 @@ html.menu-a #menuBtn { display: none; }
   html.menu-a #time { bottom: 88px; }
   html.menu-a body > main { padding-bottom: 90px; }
 }
+/* 탭이 있으니 페이지마다 따로 있던 이동 링크는 숨김 (링크 자체는 관측지·시각 계산에 계속 씀) */
+html.menu-a #observe-link, html.menu-a #wide-map-link, html.menu-a #back, html.menu-a #plan, html.menu-a .page-links { display: none !important; }
+#aaaTabs .brand, #aaaTabs .night-tab { display: none; }
+
+/* PC: 화면 맨 위 한 줄짜리 앱 머리띠. 페이지 제목과 같은 줄에 끼지 않게 모든 요소를 그만큼 내림 */
 @media (min-width: 761px) {
-  #aaaTabs { top: 14px; right: 14px; border-radius: 999px; }
-  #aaaTabs .tab { grid-auto-flow: column; gap: 6px; padding: 7px 12px; border-radius: 999px; font-size: 13px; }
+  html.menu-a { --topbar: 56px; }
+  #aaaTabs { top: 0; left: 0; right: 0; height: var(--topbar); padding: 0 max(18px, calc((100vw - 1240px) / 2)); align-items: center; gap: 4px;
+    border-radius: 0; border-width: 0 0 1px; background: #fff8e9f5; box-shadow: 0 4px 18px #120f1e40; }
+  #aaaTabs .brand { display: inline-flex; align-items: center; gap: 7px; margin-right: auto; color: #3a3046; text-decoration: none;
+    font: 21px "Jua", "Gowun Dodum", sans-serif; letter-spacing: -.01em; }
+  #aaaTabs .brand span { color: #c79a45; font-size: 18px; }
+  #aaaTabs .tab { grid-auto-flow: column; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; font-size: 14px; }
   #aaaTabs .ic { font-size: 16px; }
-  html.menu-a #detailPanel { top: 72px; }
+  html.menu-a body { padding-top: var(--topbar); }
+  html.menu-a .jump { top: var(--topbar); }
+  html.menu-a section h2 { scroll-margin-top: calc(var(--topbar) + 58px); }
+  html.menu-a #panel { top: calc(var(--topbar) + 14px); max-height: calc(100% - 150px - var(--topbar)); }
+  html.menu-a #detailPanel { top: calc(var(--topbar) + 14px); max-height: calc(100% - 150px - var(--topbar)); }
+  html.menu-a #view ~ header { top: calc(var(--topbar) + clamp(12px, 2vw, 24px)); }
+  html.menu-a #sky-help { top: calc(var(--topbar) + 14px) !important; }
+  html.menu-a #scene ~ header { top: calc(var(--topbar) + 14px); }
+  html.menu-a #site-detail { top: calc(var(--topbar) + 14px); }
+  /* 야간 버튼도 머리띠로 옮기고, 같은 이름을 두 번 보여 주던 제목 카드는 숨김 */
+  #aaaTabs .night-tab { display: grid; margin-left: 6px; border: 1px solid #d8ccb4; }
+  #aaaTabs .night-tab .dot { width: 11px; height: 11px; border-radius: 50%; background: #d33; box-shadow: 0 0 0 2px #fff8e9, 0 0 0 3px #d33; }
+  #aaaTabs .night-tab[aria-pressed="true"] { background: #2a0000; color: #ff6b6b; border-color: #ff6b6b; }
+  html.menu-a #pwaBar.inline #nightBtn { display: none; }
+  html.menu-a #panel .brand h1, html.menu-a #panel .mascot { display: none; }
+  html.menu-a #panel .brand { justify-content: flex-end; }
+  html.menu-a #scene ~ header { display: none; }
 }
 
 @media print { #aaaTabs { display: none !important; } }
-@media (min-width: 761px) { html.menu-a #sky-help { top: 74px !important; } }
