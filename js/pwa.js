@@ -116,7 +116,7 @@ function pageHref(file) {
 function menuHTML(noPages = false) {
   return `
     <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
-      <div class="sheet-head"><h2 id="sheetTitle">메뉴</h2><button type="button" class="sheet-x" aria-label="닫기">✕</button></div>
+      <div class="sheet-head"><h2 id="sheetTitle">${noPages ? "더보기" : "메뉴"}</h2><button type="button" class="sheet-x" aria-label="닫기">✕</button></div>
       <nav class="sheet-pages" aria-label="페이지"${noPages ? " hidden" : ""}>
         ${PAGES.map(([file, icon, name, sub]) => `<a href="${esc(pageHref(file))}"${file === here ? ' aria-current="page"' : ""}>
           <span class="ic" aria-hidden="true">${icon}</span><b>${name}</b><small>${sub}</small></a>`).join("")}
