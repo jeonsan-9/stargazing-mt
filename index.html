@@ -7,8 +7,8 @@
   <meta name="description" content="여러 기상 모델을 종합해 동아리 관측 MT 날짜와 장소를 고르는 3D 지도" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=20261122p" />
-  <link rel="stylesheet" href="css/diorama-map.css?v=20261122p" />
+  <link rel="stylesheet" href="css/style.css?v=20261122q" />
+  <link rel="stylesheet" href="css/diorama-map.css?v=20261122q" />
   <script>
     // 디자인 테마: 주소 뒤 ?theme=이름 으로 바꿔 볼 수 있음
     (function () {
@@ -34,8 +34,8 @@
   <meta name="apple-mobile-web-app-title" content="징크스 타파기" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="css/pwa.css?v=20261122p" />
-  <script type="module" src="js/pwa.js?v=20261122p"></script>
+  <link rel="stylesheet" href="css/pwa.css?v=20261122q" />
+  <script type="module" src="js/pwa.js?v=20261122q"></script>
 </head>
 <body>
   <div id="map"></div>
@@ -50,6 +50,7 @@
   <div id="skyMoon" aria-hidden="true"><span class="disc"></span><span class="tag"></span></div>
 
   <aside id="panel">
+    <button id="sheet-handle" type="button" aria-expanded="false" aria-controls="panel"><span class="grip" aria-hidden="true"></span><span class="label">예보 펼치기</span></button>
     <header>
       <div class="brand">
         <svg class="mascot" width="38" height="38" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
@@ -119,10 +120,12 @@
       <button id="play" class="play" aria-label="구름 재생">▶</button>
       <input type="range" id="hour" min="0" max="12" value="4" aria-label="시각" />
       <span id="hourLabel"></span>
+      <button id="controls-more" type="button" aria-expanded="false" aria-controls="controls" aria-label="지도 설정 더 보기">⚙</button>
     </div>
     <small id="city-legend" class="city-legend"><i aria-hidden="true"></i> 광공해 참고 · 약한 불빛 → 강한 불빛 <a href="https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VJ146A4" target="_blank" rel="noopener">VIIRS 2024</a></small>
   </div>
 
-  <script type="module" src="js/app.js?v=20261122p"></script>
+  <script type="module" src="js/mobile-sheet.js?v=20261122q"></script>
+  <script type="module" src="js/app.js?v=20261122q"></script>
 </body>
 </html>

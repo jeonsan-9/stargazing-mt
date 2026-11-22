@@ -6,7 +6,7 @@
   <title>AAA 징크스 타파기 · 디오라마</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/diorama-map.css?v=20261122p" />
+  <link rel="stylesheet" href="css/diorama-map.css?v=20261122q" />
   <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
   <script type="importmap">
     { "imports": {
@@ -58,8 +58,8 @@
   <meta name="apple-mobile-web-app-title" content="징크스 타파기" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="css/pwa.css?v=20261122p" />
-  <script type="module" src="js/pwa.js?v=20261122p"></script>
+  <link rel="stylesheet" href="css/pwa.css?v=20261122q" />
+  <script type="module" src="js/pwa.js?v=20261122q"></script>
 </head>
 <body>
   <canvas id="scene"></canvas>
@@ -96,7 +96,7 @@
     <div id="note" role="status">예보 불러오는 중…</div>
   </div>
   <script type="module">
-    import { Diorama } from "./js/diorama/scene.js?v=20261122p";
+    import { Diorama } from "./js/diorama/scene.js?v=20261122q";
     import { cityLightsEnabled, rememberCityLights } from "./js/city-lights.js";
     import { loadForecast } from "./js/data.js";
     import { SITES, DEPARTURE } from "./js/sites.js";
@@ -107,7 +107,7 @@
     import { drawNightSky, nightSky } from "./js/diorama/night.js";
 
     const q = new URLSearchParams(location.search);
-    const model = q.get("model") || "models/korea.glb?v=20261122p";
+    const model = q.get("model") || "models/korea.glb?v=20261122q";
     const d = await new Diorama(document.getElementById("scene"), document.getElementById("pins"), document.getElementById("moon")).load(model);
     d.calibrateWith([...SITES, DEPARTURE]);
     const slider = document.getElementById("slider");

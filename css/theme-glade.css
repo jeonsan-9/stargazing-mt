@@ -196,3 +196,4 @@ table.hourly { font-size: 12px; border-spacing: 2px; }
 
 /* 시간별 표 구름 칸: 종이 위에서 읽히도록 슬레이트색 농도 + 글자색 */
 :root { --cloud-rgb: 92, 100, 150; --cloud-hi-text: #ffffff; --cloud-lo-text: #353334; }
+
