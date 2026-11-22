@@ -59,6 +59,8 @@ function setNight(on) {
   const btn = bar.querySelector("#nightBtn");
   btn.setAttribute("aria-pressed", String(on));
   btn.querySelector(".label").textContent = on ? "야간 켬" : "야간";
+  const tab = document.querySelector("#aaaTabs .night-tab");
+  tab?.setAttribute("aria-pressed", String(on));
   if (themeMeta) themeMeta.content = on ? "#000000" : dayTheme;
   write(KEY, on ? "1" : null);
 }
@@ -230,14 +232,16 @@ function mountTabs() {
   const nav = document.createElement("nav");
   nav.id = "aaaTabs";
   nav.setAttribute("aria-label", "페이지");
-  nav.innerHTML = `${PAGES.map(([file, icon]) => `<a class="tab" href="${esc(pageHref(file))}"${file === here ? ' aria-current="page"' : ""}>
+  nav.innerHTML = `<a class="brand" href="./index.html" aria-label="AAA 징크스 타파기 첫 화면"><span aria-hidden="true">✦</span> AAA 징크스 타파기</a>${PAGES.map(([file, icon]) => `<a class="tab" href="${esc(pageHref(file))}"${file === here ? ' aria-current="page"' : ""}>
     <span class="ic" aria-hidden="true">${icon}</span><span class="tx">${SHORT[file]}</span></a>`).join("")}
+    <button type="button" class="tab night-tab" aria-pressed="${root.classList.contains("night-red")}" title="빨간 야간 모드 (N)"><span class="ic dot" aria-hidden="true"></span><span class="tx">야간</span></button>
     <button type="button" class="tab more" aria-haspopup="dialog" aria-controls="aaaSheet"><span class="ic" aria-hidden="true">⋯</span><span class="tx">더보기</span></button>`;
   // 누르기 직전에 링크를 다시 계산해서 지금 고른 관측지·시각을 들고 감
-  const refresh = () => nav.querySelectorAll("a").forEach((link, i) => { link.href = pageHref(PAGES[i][0]); });
+  const refresh = () => nav.querySelectorAll("a.tab").forEach((link, i) => { link.href = pageHref(PAGES[i][0]); });
   nav.addEventListener("pointerdown", refresh, true);
   nav.addEventListener("focusin", refresh);
   nav.querySelector(".more").onclick = () => openSheet("more");
+  nav.querySelector(".night-tab").onclick = () => setNight(!root.classList.contains("night-red"));
   document.body.append(nav);
 }
 
