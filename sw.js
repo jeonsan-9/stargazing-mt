@@ -3,7 +3,7 @@
 // - 버전 고정 CDN(jsDelivr), 글꼴: 저장본 먼저
 // - 예보 API·지도 타일: 네트워크 먼저, 끊기면 저장본
 // 파일을 바꿔도 이 버전은 올릴 필요가 없습니다. 바꾸면 예전 저장본을 한꺼번에 지웁니다.
-const VERSION = "v4";
+const VERSION = "v5";
 const CORE = `core-${VERSION}`;
 const RUNTIME = `runtime-${VERSION}`;
 
@@ -31,6 +31,7 @@ const PRECACHE = [
   "js/longrange.js",
   "js/events.js",
   "js/core.js",
+  "js/mobile-sheet.js",
   "js/retro.js",
   "js/targets.js",
   "js/site-info.js",

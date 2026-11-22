@@ -37,7 +37,12 @@ export class Diorama {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(28, 1, 1, 20000);
     this.controls = new OrbitControls(this.camera, canvas);
-    Object.assign(this.controls, { enableDamping: true, minPolarAngle: 0.35, maxPolarAngle: 1.15, enablePan: true });
+    // 기본값(회전·확대 1.0)은 손가락으로 돌리면 너무 휙휙 돌아서 낮춤. 터치 화면은 더 천천히.
+    const touch = matchMedia("(pointer: coarse)").matches;
+    Object.assign(this.controls, {
+      enableDamping: true, dampingFactor: touch ? 0.12 : 0.08, minPolarAngle: 0.35, maxPolarAngle: 1.15, enablePan: true,
+      rotateSpeed: touch ? 0.4 : 0.6, zoomSpeed: touch ? 0.55 : 0.7, panSpeed: touch ? 0.5 : 0.8,
+    });
 
     this.sky = this.#makeSky();
     this.hemi = new THREE.HemisphereLight("#cfd6ff", "#6b5a7a", 0.9);
@@ -51,6 +56,8 @@ export class Diorama {
     this.markers = [];
     this.ray = new THREE.Raycaster();
     window.addEventListener("resize", () => this.resize());
+    // 휴대폰에서 아래 시트·설정을 접고 펼 때처럼 창 크기 말고 무대 크기만 바뀌는 경우
+    if ("ResizeObserver" in window && canvas.parentElement) new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
     this.resize();
   }
 
