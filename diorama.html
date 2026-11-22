@@ -107,7 +107,7 @@
     import { drawNightSky, nightSky } from "./js/diorama/night.js";
 
     const q = new URLSearchParams(location.search);
-    const model = q.get("model") || "models/korea.glb?v=20261122d";
+    const model = q.get("model") || "models/korea.glb?v=20261122s";
     const d = await new Diorama(document.getElementById("scene"), document.getElementById("pins"), document.getElementById("moon")).load(model);
     d.calibrateWith([...SITES, DEPARTURE]);
     const slider = document.getElementById("slider");
