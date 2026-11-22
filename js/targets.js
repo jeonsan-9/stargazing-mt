@@ -176,6 +176,8 @@ const PLANET_RADII = { mercury: 2440.5, venus: 6051.8, mars: 3396.2, jupiter: 71
 export const observingTargets = [
   { id: "moon", name: "달", kind: "달", aliases: ["Moon"] },
   ...PLANETS.map(({ id, name }) => ({ id, name, kind: "행성", aliases: [id] })),
+  // 은하수 중심 팽대부: 사진 구도용 대략 20° × 10°
+  { id: "galactic-core", name: "은하수 중심", ra: 17.761, dec: -29.008, kind: "은하수", aliases: ["은하수 중심", "은하수", "Galactic Center", "Sgr A*"], size: [1200, 600] },
   { id: "M81", name: "보데 은하", ra: 9.92588, dec: 69.06531, kind: "은하", aliases: ["M81", "NGC 3031"], size: [21.63, 11.25] },
   { id: "M82", name: "시가 은하", ra: 9.93131, dec: 69.67939, kind: "은하", aliases: ["M82", "NGC 3034"], size: [10.99, 5.11] },
   { id: "NGC 869", name: "페르세우스 h 성단", ra: 2.31627, dec: 57.11725, kind: "성단", aliases: ["NGC 869"], size: [14.4, 14.4] },

@@ -4,6 +4,7 @@ import { altAz, observeTarget, observingTargets, searchObservingTargets } from "
 import { figureSegments, nearestFigure } from "./constellations.js";
 import { initMarathon, updateMarathon } from "./marathon.js?v=20261122h";
 import { ymd } from "./score.js";
+import { coreSummary } from "./core.js";
 import { drawNightSky, nightSky } from "./diorama/night.js";
 import { cameraFrame, drawCameraFrame } from "./diorama/optics.js?v=20261122d";
 import { drawSkyMap } from "./diorama/sky-map.js?v=20261122e";
@@ -63,7 +64,7 @@ function selectedSite() {
 function updateSearch(preferred = $("target").value || "M31") {
   choices = searchObservingTargets($("search").value);
   $("target").replaceChildren(...choices.map((item) =>
-    new Option(item.id === "moon" || item.kind === "행성" || item.kind === "좌표" ? item.name : `${item.id} · ${item.name}`, item.id)));
+    new Option(item.id === "moon" || item.kind === "행성" || item.kind === "은하수" || item.kind === "좌표" ? item.name : `${item.id} · ${item.name}`, item.id)));
   if (choices.some(({ id }) => id === preferred)) $("target").value = preferred;
   else if (choices[0]?.kind === "좌표") $("target").value = choices[0].id;
   $("target").disabled = choices.length === 0;
@@ -122,10 +123,29 @@ function updateSky() {
     const peak = target && samples.length ? samples.reduce((best, sample, index) => sample.target > samples[best].target ? index : best, 0) : -1;
     if (peak > 0 && peak < samples.length - 1 && samples[peak].target > 0 && target.id !== "moon")
       crossings.push([samples[peak].time, `남중 ${clock.format(samples[peak].time)} (${Math.round(samples[peak].target)}°)`]);
+    updateCore(day, site);
     $("crossings").textContent = crossings.length ? `뜨고 지는 시각 · ${crossings.sort((a, b) => a[0] - b[0]).map(([, label]) => label).join(" · ")}` : "";
   }
   updatePosition();
 }
+
+let coreKey, coreNext;
+function updateCore(day, site) {
+  const key = `${site.id}:${day}`;
+  if (key === coreKey) return;
+  coreKey = key;
+  const core = coreSummary(day, site);
+  coreNext = core.nextDay;
+  $("core-time").textContent = core.visible ? core.text : "오늘 밤은 안 보임";
+  $("core-note").textContent = core.visible ? core.next : `${core.text} ${core.next}`;
+  $("core-card").classList.toggle("good", Boolean(core.moonGood));
+  $("core-go").textContent = core.visible ? "은하수 중심 보기" : coreNext ? "그날로 이동" : "은하수 중심 보기";
+}
+$("core-go").addEventListener("click", () => {
+  if (coreNext) $("night").value = coreNext;
+  $("search").value = "";
+  updateSearch("galactic-core");
+});
 
 function updatePosition() {
   const time = sky?.samples[Number($("scrub").value)]?.time;
