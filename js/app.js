@@ -5,7 +5,7 @@ import { MODELS, GRID_MODELS, modelLabel } from "./models.js";
 import { loadForecast } from "./data.js";
 import { renderMonth, renderSemester, renderYear, moonIcon } from "./longrange.js";
 import { targetsHTML } from "./targets.js";
-import { scoreNight, scoreColor, moonInfo, darkWindow, parseLocal, ymd, addDays, nightIndices } from "./score.js";
+import { scoreNight, scoreColor, moonInfo, darkWindow, parseLocal, ymd, addDays, nightIndices, verdict, dewPoint } from "./score.js";
 import { cityLightsEnabled, rememberCityLights } from "./city-lights.js";
 import { LAT0, LON0 } from "./diorama/geo.js";
 import { drawNightSky, nightSky } from "./diorama/night.js";
@@ -697,7 +697,7 @@ function renderVerdict() {
   const [word, cls] = r.score >= 70 ? ["가자!", "go"] : r.score >= 45 ? ["애매해요", "maybe"] : ["접자", "no"];
   box.className = `verdict ${cls}`;
   box.innerHTML = `<b>이번 주말 보현산: ${word}</b>
-    <small>${WD[d.getDay()]}요일 밤 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 구름 ${r.cloud}%${rain >= 0.1 ? ` · 비 ${rain.toFixed(1)}mm` : ""} · ${r.score}점 · 모델 일치 ${r.agreement}</small>`;
+    <small>${WD[d.getDay()]}요일 밤 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 구름 ${r.cloud}%${rain >= 0.1 ? ` · 비 ${rain.toFixed(1)}mm` : ""} · ${r.score}점 ${verdict(r.score).word} · 모델 일치 ${r.agreement}</small>`;
   box.onclick = () => setNight(n);
 }
 
@@ -828,7 +828,7 @@ function renderList() {
     el.className = "site" + (state.selected === r.site.id ? " active" : "");
     el.innerHTML = `
       <span class="score" style="background:rgba(${scoreColor(r.score).slice(0, 3).join(",")},.92)">${r.score ?? "-"}</span>
-      <span class="sname">${r.site.name}${r.site.verified ? "" : ' <em title="좌표 확인 필요">위치 확인 필요</em>'}<small>${r.site.region} · ${r.score == null ? "예보 없음" : `최적 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 좋은 시간 ${r.goodHours}h · 모델 일치 ${r.agreement}`}</small></span>`;
+      <span class="sname">${r.site.name}${r.site.verified ? "" : ' <em title="좌표 확인 필요">위치 확인 필요</em>'}<small>${r.score == null ? "" : `<b class="word ${verdict(r.score).cls}">${verdict(r.score).word}</b> `}${r.site.region} · ${r.score == null ? "예보 없음" : `최적 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 좋은 시간 ${r.goodHours}h · 모델 일치 ${r.agreement}`}</small></span>`;
     el.onclick = () => selectSite(r.site.id, true);
     list.appendChild(el);
   }
@@ -900,9 +900,18 @@ function hourTable(r) {
       ${row("시상", hrs.map((h) => warnCell(h.seeing, (v) => v, 4, 6)).join(""), "7Timer 1(좋음)~8(나쁨)")}
       ${row("투명도", hrs.map((h) => warnCell(h.transparency, (v) => v, 4, 6)).join(""), "7Timer 1(좋음)~8(나쁨)")}
       ${row("비", hrs.map((h) => (h.precip == null ? cell("·", "na") : cell(h.precip >= 0.1 ? h.precip.toFixed(1) : "", h.precip >= 1 ? "w2" : h.precip >= 0.1 ? "w1" : ""))).join(""), "mm/시간, 모델 중간값")}
+      ${row("이슬", hrs.map((h) => { const gap = h.temp == null ? null : h.temp - dewPoint(h.temp, h.rh); return gap == null || !Number.isFinite(gap) ? cell("·", "na") : cell(gap < 2 ? "💧" : gap < 4 ? "·" : "", gap < 2 ? "w2" : gap < 4 ? "w1" : "", "", `기온−이슬점 ${gap.toFixed(1)}°C`); }).join(""), "기온과 이슬점 차가 2°C 아래면 💧")}
       ${row("기온", hrs.map((h) => (h.temp == null ? cell("·", "na") : cell(Math.round(h.temp)))).join(""), "°C")}
     </tbody>
   </table></div>`;
+}
+
+function flagsHTML(r) {
+  const flags = [];
+  if (r.score != null && r.agreement === "낮음") flags.push(["warn", `⚠ 모델끼리 의견이 크게 갈립니다 (구름 차이 평균 ${Math.round(r.spread)}%p). 출발 직전 예보를 다시 보세요.`]);
+  if (r.dew === "높음") flags.push(["dew", "💧 이슬이 맺히기 쉬운 밤입니다. 열선 밴드나 후드, 렌즈 닦이를 챙기세요."]);
+  else if (r.dew === "주의") flags.push(["dew", "💧 새벽에 이슬이 생길 수 있습니다. 후드를 챙기세요."]);
+  return flags.map(([cls, text]) => `<p class="flag ${cls}">${text}</p>`).join("");
 }
 
 function renderDetail() {
@@ -928,7 +937,8 @@ function renderDetail() {
     .join("");
   const [cr, cg, cb] = scoreColor(r.score);
   box.innerHTML = `
-    <h3>${r.site.name} <span class="score" style="background:rgba(${cr},${cg},${cb},.92)">${r.score ?? "-"}</span></h3>
+    <h3>${r.site.name} <span class="score" style="background:rgba(${cr},${cg},${cb},.92)">${r.score ?? "-"}</span> <span class="word ${verdict(r.score).cls}">${verdict(r.score).word}</span></h3>
+    ${flagsHTML(r)}
     <a id="site-sky-link" class="diorama-link" href="./sky.html">이곳에서 하늘 보기</a>
     ${!map ? '<button id="site-model" class="diorama-link" type="button">이 지점 확대</button>' : ''}
     <details><summary>관측 시 주의사항</summary><div id="main-site-info" class="hint"></div></details>
@@ -937,6 +947,7 @@ function renderDetail() {
         ? "이 밤의 예보 자료가 없습니다."
         : `가장 좋은 시간 <b>${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)}</b> · 70점 넘는 시간 <b>${r.goodHours}시간</b> · 최고 ${r.peak.score}점 (${fmtHour(r.peak.t)})`
     }</p>
+    <div class="kv"><span>이슬 위험</span><b>${r.dew == null ? "-" : `${r.dew} · 기온과 이슬점 차 최소 ${r.dewGap.toFixed(1)}°C`}</b></div>
     <div class="kv"><span>해발</span><b>${elev != null ? Math.round(elev) + " m" : "-"}</b></div>
     <div class="kv"><span>천문박명 (완전히 어두운 시간)</span><b>${fmtTime(dw.dusk)} ~ ${fmtTime(dw.dawn)}</b></div>
     <div class="kv"><span>달</span><b>${moon.phaseName} · ${Math.round(moon.fraction * 100)}% · 뜸 ${fmtTime(moon.rise)} / 짐 ${fmtTime(moon.set)}</b></div>

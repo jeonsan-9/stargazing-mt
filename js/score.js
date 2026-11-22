@@ -219,6 +219,10 @@ export function scoreNight(data, site, ymdStr) {
   const minModels = Math.min(...win.map((h) => h.n));
   const agreement = minModels < 2 ? "비교 불가" : spread < 20 ? "높음" : spread < 40 ? "보통" : "낮음";
   const cloud = Math.round(win.reduce((a, h) => a + (h.cloud ?? 0), 0) / win.length);
+  // 이슬: 기온과 이슬점 차이가 작으면 렌즈·경통에 이슬이 맺힘
+  const gaps = dark.map((h) => (h.temp == null ? null : h.temp - dewPoint(h.temp, h.rh))).filter((x) => x != null && Number.isFinite(x));
+  const dewGap = gaps.length ? Math.min(...gaps) : null;
+  const dew = dewGap == null ? null : dewGap < 2 ? "높음" : dewGap < 4 ? "주의" : "낮음";
 
   // 모델별 평균 구름 (가장 좋은 시간대 기준)
   const models = {};
@@ -228,12 +232,29 @@ export function scoreNight(data, site, ymdStr) {
   }
 
   return {
-    site, hours, dusk, dawn, models, agreement, spread, cloud, goodHours,
+    site, hours, dusk, dawn, models, agreement, spread, cloud, goodHours, dew, dewGap,
     score: Math.round(best.avg),
     windowStart: win[0].t,
     windowEnd: new Date(win[win.length - 1].t.getTime() + 3600e3),
     peak,
   };
+}
+
+// 점수를 한마디로
+export function verdict(score) {
+  if (score == null) return { word: "예보 없음", cls: "none" };
+  if (score >= 80) return { word: "최고", cls: "best" };
+  if (score >= 60) return { word: "좋음", cls: "good" };
+  if (score >= 40) return { word: "애매", cls: "mid" };
+  if (score >= 20) return { word: "나쁨", cls: "bad" };
+  return { word: "쉬는 날", cls: "off" };
+}
+
+// Magnus 식 이슬점 (°C)
+export function dewPoint(temp, rh) {
+  if (temp == null || rh == null || rh <= 0) return null;
+  const g = Math.log(rh / 100) + (17.62 * temp) / (243.12 + temp);
+  return (243.12 * g) / (17.62 - g);
 }
 
 export function scoreColor(score, alpha = 230) {
