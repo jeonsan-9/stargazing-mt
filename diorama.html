@@ -6,7 +6,7 @@
   <title>AAA 징크스 타파기 · 디오라마</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/diorama-map.css?v=20261122f" />
+  <link rel="stylesheet" href="css/diorama-map.css?v=20261122m" />
   <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
   <script type="importmap">
     { "imports": {
@@ -96,7 +96,7 @@
     <div id="note" role="status">예보 불러오는 중…</div>
   </div>
   <script type="module">
-    import { Diorama } from "./js/diorama/scene.js?v=20261122f";
+    import { Diorama } from "./js/diorama/scene.js?v=20261122m";
     import { cityLightsEnabled, rememberCityLights } from "./js/city-lights.js";
     import { loadForecast } from "./js/data.js";
     import { SITES, DEPARTURE } from "./js/sites.js";
@@ -107,7 +107,7 @@
     import { drawNightSky, nightSky } from "./js/diorama/night.js";
 
     const q = new URLSearchParams(location.search);
-    const model = q.get("model") || "models/korea.glb?v=20261122s";
+    const model = q.get("model") || "models/korea.glb?v=20261122m";
     const d = await new Diorama(document.getElementById("scene"), document.getElementById("pins"), document.getElementById("moon")).load(model);
     d.calibrateWith([...SITES, DEPARTURE]);
     const slider = document.getElementById("slider");

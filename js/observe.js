@@ -435,3 +435,9 @@ initMarathon((id) => {
   updateSearch(id);
   $("search-title").scrollIntoView({ behavior: "smooth", block: "start" });
 });
+
+// 넓은 화면에서는 마라톤 목록을 펼쳐 둠, 휴대폰은 접어서 스크롤을 줄임
+if (matchMedia("(min-width: 761px)").matches) { $("marathon-more").open = true; $("marathon-more").querySelector("summary").textContent = "목록 접기"; }
+$("marathon-more").addEventListener("toggle", () => {
+  $("marathon-more").querySelector("summary").textContent = $("marathon-more").open ? "목록 접기" : "110개 목록 펼치기";
+});

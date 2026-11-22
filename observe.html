@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>관측 계획 · AAA 징크스 타파기</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap">
-  <link rel="stylesheet" href="css/observe.css?v=20261122g">
+  <link rel="stylesheet" href="css/observe.css?v=20261122m">
   <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#484756" />
@@ -21,10 +21,13 @@
 <body>
   <main>
     <header>
-      <a href="./index.html">← 기본 지도</a>
+      <a href="./index.html">← 예보 지도</a>
       <h1>관측 계획</h1>
       <span data-pwa-slot></span>
     </header>
+    <nav class="jump" aria-label="이 페이지 바로가기">
+      <a href="#search-title">🔭 천체</a><a href="#frame-title">📷 화각·노출</a><a href="#marathon-title">🏃 마라톤</a><a href="#sessions-title">📝 기록</a>
+    </nav>
     <div class="layout">
       <section aria-labelledby="search-title">
         <h2 id="search-title">천체 찾기</h2>
@@ -140,6 +143,8 @@
       <p class="hint">하룻밤에 메시에 천체 110개를 몇 개나 찾을 수 있을까요? 위에서 고른 관측지와 날짜로, 해가 −12° 아래이고 고도 15° 이상인 시간을 계산합니다. 이름을 누르면 위에서 그 천체를 엽니다.</p>
       <progress id="marathon-progress" max="110" value="0"></progress>
       <p id="marathon-count" class="result" role="status"></p>
+      <details id="marathon-more">
+      <summary>110개 목록 펼치기</summary>
       <div class="marathon-tools">
         <label>정렬<select id="marathon-sort">
           <option value="night">오늘 밤 순서 · 서쪽에서 먼저 지는 것부터</option>
@@ -150,6 +155,7 @@
         <button id="marathon-reset" type="button" class="plain">체크 모두 지우기</button>
       </div>
       <ol id="marathon-list" class="marathon-list"></ol>
+      </details>
     </section>
     <section class="sessions" aria-labelledby="sessions-title">
       <h2 id="sessions-title">관측 계획 · 기록</h2>
@@ -166,6 +172,6 @@
     </section>
     <footer>하늘 위치와 각크기는 계획용 근사치입니다. 각크기 자료 <a href="https://github.com/mattiaverga/OpenNGC">OpenNGC</a> · 데이터 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> · 행성 크기 <a href="https://nssdc.gsfc.nasa.gov/planetary/factsheet/">NASA</a> · 메시에 좌표 <a href="https://github.com/ofrohn/d3-celestial">d3-celestial</a> (BSD-3-Clause)</footer>
   </main>
-  <script type="module" src="js/observe.js?v=20261122h"></script>
+  <script type="module" src="js/observe.js?v=20261122m"></script>
 </body>
 </html>

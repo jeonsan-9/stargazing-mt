@@ -148,3 +148,6 @@ html.sheet-open, html.sheet-open body { overflow: hidden; }
 #aaaSheet .report-kinds input[type="radio"] { display: inline-block; width: 18px; height: 18px; min-height: 0; flex: none; padding: 0; }
 #aaaSheet label { font-size: 14px; }
 #aaaSheet .sheet-x { min-width: 0; padding: 0; color: #393634; }
+/* 머리말 안에서는 메뉴·야간만 두고 설치는 메뉴 시트로 */
+#pwaBar.inline #installBtn { display: none; }
+#menuBtn { background: #5f4a73 !important; color: #fff8e9 !important; border-color: #5f4a73 !important; box-shadow: 0 2px 0 #3c2e4a !important; }

@@ -43,11 +43,11 @@ veil.setAttribute("aria-hidden", "true");
 const bar = document.createElement("div");
 bar.id = "pwaBar";
 bar.innerHTML = `
+  <button type="button" id="menuBtn" aria-haspopup="dialog" aria-controls="aaaSheet" title="메뉴 (M)"><span aria-hidden="true">☰</span> 메뉴</button>
   <button type="button" id="nightBtn" aria-pressed="false" title="빨간 야간 모드 (N)">
     <span class="dot" aria-hidden="true"></span><span class="label">야간</span>
   </button>
   <button type="button" id="installBtn" hidden>앱 설치</button>
-  <button type="button" id="menuBtn" aria-haspopup="dialog" aria-controls="aaaSheet" title="메뉴 (M)"><span aria-hidden="true">☰</span> 메뉴</button>
   <span id="netBadge" role="status" hidden>오프라인 · 저장본</span>
 `;
 
