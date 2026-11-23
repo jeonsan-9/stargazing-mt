@@ -191,7 +191,7 @@ html.menu-a #observe-link, html.menu-a #wide-map-link, html.menu-a #back, html.m
   html.menu-a .jump { top: var(--topbar); }
   html.menu-a section h2 { scroll-margin-top: calc(var(--topbar) + 58px); }
   html.menu-a #panel { top: calc(var(--topbar) + 14px); max-height: calc(100% - 150px - var(--topbar)); }
-  html.menu-a #detailPanel { top: calc(var(--topbar) + 14px); max-height: calc(100% - 150px - var(--topbar)); }
+  html.menu-a #detailPanel { top: calc(var(--topbar) + 14px); max-height: calc(100% - 172px - var(--topbar)); }
   html.menu-a #view ~ header { top: calc(var(--topbar) + clamp(12px, 2vw, 24px)); }
   html.menu-a #sky-help { top: calc(var(--topbar) + 14px) !important; }
   html.menu-a #scene ~ header { top: calc(var(--topbar) + 14px); }

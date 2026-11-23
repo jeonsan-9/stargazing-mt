@@ -92,7 +92,7 @@ async function loadDiorama() {
   $("toggle3d").textContent = "시점 초기화";
   $("map-status").textContent = "3D 지도 불러오는 중…";
   try {
-    const { Diorama } = await import("./diorama/scene.js?v=20261122f");
+    const { Diorama } = await import("./diorama/scene.js?v=20261123a");
     const pins = $("pins");
     diorama = await new Diorama($("scene"), pins, $("moon")).load("models/korea.glb?v=20261122s");
     diorama.calibrateWith([...SITES, DEPARTURE]);
@@ -522,7 +522,7 @@ function renderLayers() {
     }
     diorama.setCloudVisibility(state.showCloud);
     diorama.setSites(visible.map(({ site, hours }) =>
-      ({ ...site, score: hours.find((hour) => hour.i === i)?.score ?? null })));
+      ({ ...site, selected: site.id === state.selected, score: hours.find((hour) => hour.i === i)?.score ?? null })));
     return;
   }
   const layers = [];
@@ -697,7 +697,7 @@ function renderVerdict() {
   const [word, cls] = r.score >= 70 ? ["가자!", "go"] : r.score >= 45 ? ["애매해요", "maybe"] : ["접자", "no"];
   box.className = `verdict ${cls}`;
   box.innerHTML = `<b>이번 주말 보현산: ${word}</b>
-    <small>${WD[d.getDay()]}요일 밤 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 구름 ${r.cloud}%${rain >= 0.1 ? ` · 비 ${rain.toFixed(1)}mm` : ""} · ${r.score}점 ${verdict(r.score).word} · 모델 일치 ${r.agreement}</small>`;
+    <small>${WD[d.getDay()]}요일 밤 ${fmtHour(r.windowStart)}~${fmtHour(r.windowEnd)} · 구름 ${r.cloud}%${rain >= 0.1 ? ` · 비 ${rain.toFixed(1)}mm` : r.rainModels ? ` · 비 예보 모델 ${r.rainModels.wet}/${r.rainModels.of}` : ""} · ${r.score}점 ${verdict(r.score).word} · 모델 일치 ${r.agreement}</small>`;
   box.onclick = () => setNight(n);
 }
 
@@ -899,7 +899,7 @@ function hourTable(r) {
       ${row("시정", hrs.map((h) => (h.vis == null ? cell("·", "na") : cell(Math.round(h.vis / 1000), h.vis < 10000 ? "w1" : ""))).join(""), "km")}
       ${row("시상", hrs.map((h) => warnCell(h.seeing, (v) => v, 4, 6)).join(""), "7Timer 1(좋음)~8(나쁨)")}
       ${row("투명도", hrs.map((h) => warnCell(h.transparency, (v) => v, 4, 6)).join(""), "7Timer 1(좋음)~8(나쁨)")}
-      ${row("비", hrs.map((h) => (h.precip == null ? cell("·", "na") : cell(h.precip >= 0.1 ? h.precip.toFixed(1) : "", h.precip >= 1 ? "w2" : h.precip >= 0.1 ? "w1" : ""))).join(""), "mm/시간, 모델 중간값")}
+      ${row("비", hrs.map((h) => (h.precip == null ? cell("·", "na") : cell(h.precip >= 0.1 ? h.precip.toFixed(1) : h.rainShare >= 0.3 ? "△" : "", h.precip >= 1 ? "w2" : h.precip >= 0.1 || h.rainShare >= 0.3 ? "w1" : "", "", h.rainShare ? `모델 ${h.rainN}개 중 ${Math.round(h.rainShare * h.rainN)}개가 비 예보` : ""))).join(""), "mm/시간, 모델 중간값. △ = 중간값은 0이지만 모델 셋 중 하나 이상이 비 예보")}
       ${row("이슬", hrs.map((h) => { const gap = h.temp == null ? null : h.temp - dewPoint(h.temp, h.rh); return gap == null || !Number.isFinite(gap) ? cell("·", "na") : cell(gap < 2 ? "💧" : gap < 4 ? "·" : "", gap < 2 ? "w2" : gap < 4 ? "w1" : "", "", `기온−이슬점 ${gap.toFixed(1)}°C`); }).join(""), "기온과 이슬점 차가 2°C 아래면 💧")}
       ${row("기온", hrs.map((h) => (h.temp == null ? cell("·", "na") : cell(Math.round(h.temp)))).join(""), "°C")}
     </tbody>
@@ -909,6 +909,7 @@ function hourTable(r) {
 function flagsHTML(r) {
   const flags = [];
   if (r.score != null && r.agreement === "낮음") flags.push(["warn", `⚠ 모델끼리 의견이 크게 갈립니다 (구름 차이 평균 ${Math.round(r.spread)}%p). 출발 직전 예보를 다시 보세요.`]);
+  if (r.score != null && r.rainModels) flags.push(["warn", `☔ 모델 ${r.rainModels.of}개 중 ${r.rainModels.wet}개가 가장 좋은 시간대에 비를 예보합니다. 점수에 반영했어요.`]);
   if (r.dew === "높음") flags.push(["dew", "💧 이슬이 맺히기 쉬운 밤입니다. 열선 밴드나 후드, 렌즈 닦이를 챙기세요."]);
   else if (r.dew === "주의") flags.push(["dew", "💧 새벽에 이슬이 생길 수 있습니다. 후드를 챙기세요."]);
   return flags.map(([cls, text]) => `<p class="flag ${cls}">${text}</p>`).join("");

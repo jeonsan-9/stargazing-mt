@@ -479,6 +479,7 @@ export class Diorama {
         existing.s = s;
         existing.badge.textContent = s.score ?? "✦";
         existing.badge.style.setProperty("--c", scoreHex(s.score));
+        existing.el.classList.toggle("selected", Boolean(s.selected));
         return existing;
       }
       const p = this.anchors[s.id]?.clone() ?? this.ground(s.lon, s.lat);
@@ -496,7 +497,7 @@ export class Diorama {
       el.type = "button";
       el.dataset.site = s.id;
       el.setAttribute("aria-controls", this.overlay.dataset.controls || "site-detail");
-      el.className = "pin" + (s.primary ? " primary" : "");
+      el.className = "pin" + (s.primary ? " primary" : "") + (s.selected ? " selected" : "");
       const badge = document.createElement("b");
       badge.textContent = s.score ?? "✦";
       badge.style.setProperty("--c", scoreHex(s.score));
@@ -536,7 +537,8 @@ export class Diorama {
       lastFrame = now;
       const brightness = this.showCityLights ? this.nightLights * 1.55 : 0;
       this.cityLightStrength.value = THREE.MathUtils.damp(this.cityLightStrength.value, brightness, 5, delta);
-      this.overlay.classList.toggle("overview", this.camera.position.distanceTo(this.controls.target) > this.radius * 0.57);
+      const overview = this.camera.position.distanceTo(this.controls.target) > this.radius * 0.57;
+      this.overlay.classList.toggle("overview", overview);
       this.renderer.render(this.scene, this.camera);
       const w = this.canvas.clientWidth;
       const h = this.canvas.clientHeight;
@@ -568,6 +570,13 @@ export class Diorama {
         const y = (1 - v.y) * h / 2;
         const pw = m.el.offsetWidth;
         const ph = m.el.offsetHeight;
+        // 전국이 한눈에 보일 땐 MT 장소와 고른 곳만 이름표를 달고, 나머지는 제자리에 점수 색 점으로만
+        // (31곳 모두 이름표와 이음선을 달면 휴대폰에선 지도가 가려짐)
+        if (overview && !m.s.primary && !m.s.selected) {
+          m.stem.hidden = true;
+          m.el.style.transform = `translate(${x - pw / 2}px, ${y - ph / 2}px)`;
+          continue;
+        }
         const choices = [[x + 9, y - ph - 7], [x - pw - 9, y - ph - 7], [x + 9, y + 8], [x - pw - 9, y + 8]];
         for (const row of [-2, 1, -3, 2, -4, 3]) {
           const top = y + row * (ph + 7);

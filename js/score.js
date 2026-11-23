@@ -79,7 +79,8 @@ export const factor = {
   },
   moon(altDeg, illum) {
     if (altDeg <= 0) return 1;
-    return 1 - 0.38 * illum * Math.min(1, (altDeg + 3) / 25);
+    // 보름달이 높이 뜨면 하늘이 약 20배 밝아져 은하수·성운은 거의 안 보임 → 절반까지 깎음
+    return 1 - 0.5 * illum * Math.min(1, (altDeg + 3) / 25);
   },
   rh(v) {
     if (v == null) return 1;
@@ -153,6 +154,9 @@ export function scoreHour(data, site, i) {
   const vis = medianOf(siteData, "vis", i);
   const temp = medianOf(siteData, "temp", i);
   const precip = medianOf(siteData, "precip", i);
+  // 비는 중앙값만 보면 놓침: 모델 9개 중 4개가 비를 예보해도 중앙값은 0mm. 비를 예보한 모델 비율을 따로 셈
+  const rains = Object.values(siteData.models).map((m) => m.precip?.[i]).filter((v) => v != null);
+  const rainShare = rains.length >= 3 ? rains.filter((v) => v >= 0.1).length / rains.length : null;
   const pm25 = siteData.air?.pm25?.[i] ?? null;
   const pm10 = siteData.air?.pm10?.[i] ?? null;
   const seeing = siteData.astro?.seeing?.[i] ?? null;
@@ -166,7 +170,7 @@ export function scoreHour(data, site, i) {
     wind: factor.wind(wind),
     pm: factor.pm25(pm25),
     vis: factor.vis(vis),
-    precip: factor.precip(precip),
+    precip: Math.min(factor.precip(precip), rainShare != null && rainShare >= 0.3 ? 1 - 0.5 * rainShare : 1),
   };
   const product = Object.values(f).reduce((a, b) => a * b, 1);
   const score = totals.length ? Math.round(100 * product) : null;
@@ -174,7 +178,7 @@ export function scoreHour(data, site, i) {
 
   return {
     i, t, score, f, sunAlt, moonAlt, illum,
-    total, low, mid, high, cloud, rh, wind, vis, temp, precip, pm25, pm10, seeing, transparency,
+    total, low, mid, high, cloud, rh, wind, vis, temp, precip, rainShare, rainN: rains.length, pm25, pm10, seeing, transparency,
     spread, n: totals.length,
   };
 }
@@ -193,9 +197,19 @@ export function nightIndices(data, ymdStr) {
 
 const WINDOW = 3; // 시간
 
-// 한 관측지의 하룻밤 결과
+// 한 관측지의 하룻밤 결과. 같은 예보에서는 답이 변하지 않으므로 한 번 계산한 밤은 기억해 둠
+// (밤 버튼 7개 × 관측지 31곳을 화면을 그릴 때마다 다시 계산하지 않게)
+const nightCache = new WeakMap();
 export function scoreNight(data, site, ymdStr) {
   if (!data.sites[site.id]) return null;
+  let cache = nightCache.get(data);
+  if (!cache) nightCache.set(data, (cache = new Map()));
+  const key = `${site.id}|${ymdStr}`;
+  if (!cache.has(key)) cache.set(key, computeNight(data, site, ymdStr));
+  return cache.get(key);
+}
+
+function computeNight(data, site, ymdStr) {
   const hours = nightIndices(data, ymdStr).map((i) => scoreHour(data, site, i));
   const dark = hours.filter((h) => h.f.dark > 0 && h.score != null);
   const { dusk, dawn } = darkWindow(ymdStr, site.lat, site.lon);
@@ -231,8 +245,12 @@ export function scoreNight(data, site, ymdStr) {
     if (vals.length) models[m] = Math.round(vals.reduce((a, x) => a + x, 0) / vals.length);
   }
 
+  // 가장 좋은 3시간 안에서 비를 예보한 모델이 가장 많았던 시각
+  const rainHour = win.reduce((a, h) => ((h.rainShare ?? 0) > (a?.rainShare ?? 0) ? h : a), null);
+  const rainModels = rainHour?.rainShare >= 0.3 ? { wet: Math.round(rainHour.rainShare * rainHour.rainN), of: rainHour.rainN } : null;
+
   return {
-    site, hours, dusk, dawn, models, agreement, spread, cloud, goodHours, dew, dewGap,
+    site, hours, dusk, dawn, models, agreement, spread, cloud, goodHours, dew, dewGap, rainModels,
     score: Math.round(best.avg),
     windowStart: win[0].t,
     windowEnd: new Date(win[win.length - 1].t.getTime() + 3600e3),
