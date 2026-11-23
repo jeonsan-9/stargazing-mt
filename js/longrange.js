@@ -3,7 +3,7 @@
 
 /* global SunCalc */
 import { scoreNight, scoreColor, addDays, ymd } from "./score.js";
-import { academic, conflict } from "./calendar.js";
+import { academic, conflict, PAST_MTS } from "./calendar.js";
 import { renderRetro } from "./retro.js";
 import { astroEvents, eventsNear, eventsHTML } from "./events.js";
 
@@ -94,7 +94,10 @@ let retroHTML = null;
 let retroJob = null;
 
 export function renderSemester(box, data, site, todayYmd, onPick) {
-  const html = semesters(todayYmd)
+  // 이번 학기 MT를 이미 다녀왔으면 다음 학기 계획을 먼저 보여 주고, 이번 학기는 접어 둠
+  const sems = semesters(todayYmd).map((sem) => ({ ...sem, went: PAST_MTS.find((p) => p.ymd >= sem.start && p.ymd <= sem.end)?.ymd }));
+  sems.sort((a, b) => Boolean(a.went) - Boolean(b.went));
+  const html = sems
     .map((sem) => {
       const nights = [];
       for (let d = sem.start; d <= sem.end; d = addDays(d, 1)) {
@@ -140,14 +143,18 @@ export function renderSemester(box, data, site, todayYmd, onPick) {
       const avoid = sem.avoid
         .map(([a, b, why]) => `<span class="chip">${why} ${a.slice(5).replace("-", "/")}~${b.slice(5).replace("-", "/")}</span>`)
         .join("");
-      return `<section class="sem"><h3>${sem.name} MT 날짜 미리 정하기</h3>
+      const went = sem.went && dateOf(sem.went);
+      const open = went
+        ? `<details class="sem done"><summary><b>${sem.name}</b> · MT는 ${went.getUTCMonth() + 1}월 ${went.getUTCDate()}일에 다녀왔어요 <small>남은 주말 보기</small></summary>`
+        : `<section class="sem"><h3>${sem.name} MT 날짜 미리 정하기</h3>`;
+      return `${open}
         <p class="lead">예보 없이 영천의 10년 기록(비·구름)과 달만으로 매긴 순위예요. 시험기간과 연휴는 뺐어요.</p>
         <div class="strip">${strip}</div>
         <div class="strip-legend"><span>${(sem.start > todayYmd ? sem.start : todayYmd).slice(5).replace("-", "/")}</span><span>금·토 밤 · 빗금 = 제외 · 점 = 천문 현상</span><span>${sem.end.slice(5).replace("-", "/")}</span></div>
         ${list}
         <h4 class="ev-head">이 학기 천문 현상 <small>· 날짜를 누르면 그 밤으로</small></h4>
         ${eventsHTML(events)}
-        <div class="chips">${avoid}${sem.guessed ? '<span class="chip soft">학사일정 추정치</span>' : ""}</div></section>`;
+        <div class="chips">${avoid}${sem.guessed ? '<span class="chip soft">학사일정 추정치</span>' : ""}</div>${went ? "</details>" : "</section>"}`;
     })
     .join("");
   box.innerHTML =
